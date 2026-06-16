@@ -3,7 +3,7 @@ server:
   mode: debug
 
 database:
-  dsn: "host=localhost port=5432 user=agenthub password=agenthub dbname=agenthub sslmode=disable"
+  dsn: "data/agenthub.db"
   max_open_conns: 20
   max_idle_conns: 10
   conn_max_lifetime: 3600
