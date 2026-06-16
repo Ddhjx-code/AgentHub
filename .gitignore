@@ -4,6 +4,9 @@ demo/
 # Build output
 bin/
 
+# SQLite database files
+data/
+
 # Binaries
 *.exe
 *.exe~
