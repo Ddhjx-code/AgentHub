@@ -1,0 +1,19 @@
+server:
+  port: 8080
+  mode: debug
+
+database:
+  dsn: "host=localhost port=5432 user=agenthub password=agenthub dbname=agenthub sslmode=disable"
+  max_open_conns: 20
+  max_idle_conns: 10
+  conn_max_lifetime: 3600
+
+jwt:
+  secret: "change-me-in-production"
+  expire_hour: 24
+
+coze:
+  base_url: "https://api.coze.cn"
+
+n8n:
+  default_timeout: 30
