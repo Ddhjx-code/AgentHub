@@ -24,11 +24,14 @@ func NewRepository(db *sql.DB) Repository {
 }
 
 func (r *repository) Create(ctx context.Context, user *model.User) error {
-	query := `INSERT INTO users (email, name, password, avatar, status, created_at, updated_at)
-              VALUES (?, ?, ?, ?, ?, ?, ?)`
+	if user.Role == "" {
+		user.Role = model.UserRoleUser
+	}
+	query := `INSERT INTO users (email, name, password, avatar, role, status, created_at, updated_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
 	now := time.Now()
 	result, err := r.db.ExecContext(ctx, query,
-		user.Email, user.Name, user.Password, user.Avatar, user.Status, now, now)
+		user.Email, user.Name, user.Password, user.Avatar, user.Role, user.Status, now, now)
 	if err != nil {
 		return fmt.Errorf("insert user: %w", err)
 	}
@@ -43,12 +46,12 @@ func (r *repository) Create(ctx context.Context, user *model.User) error {
 }
 
 func (r *repository) GetByEmail(ctx context.Context, email string) (*model.User, error) {
-	query := `SELECT id, email, name, password, avatar, status, created_at, updated_at
+	query := `SELECT id, email, name, password, avatar, role, status, created_at, updated_at
               FROM users WHERE email = ?`
 	user := &model.User{}
 	err := r.db.QueryRowContext(ctx, query, email).Scan(
 		&user.ID, &user.Email, &user.Name, &user.Password,
-		&user.Avatar, &user.Status, &user.CreatedAt, &user.UpdatedAt)
+		&user.Avatar, &user.Role, &user.Status, &user.CreatedAt, &user.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -59,12 +62,12 @@ func (r *repository) GetByEmail(ctx context.Context, email string) (*model.User,
 }
 
 func (r *repository) GetByID(ctx context.Context, id int64) (*model.User, error) {
-	query := `SELECT id, email, name, password, avatar, status, created_at, updated_at
+	query := `SELECT id, email, name, password, avatar, role, status, created_at, updated_at
               FROM users WHERE id = ?`
 	user := &model.User{}
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
 		&user.ID, &user.Email, &user.Name, &user.Password,
-		&user.Avatar, &user.Status, &user.CreatedAt, &user.UpdatedAt)
+		&user.Avatar, &user.Role, &user.Status, &user.CreatedAt, &user.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
