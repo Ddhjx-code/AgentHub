@@ -73,3 +73,52 @@ func TestGetByUserIDNotFound(t *testing.T) {
 		t.Fatal("expected nil for non-existent user_id")
 	}
 }
+
+func TestDeduct(t *testing.T) {
+	repo, user := setupTestDB(t)
+	ctx := context.Background()
+
+	repo.Create(ctx, &model.Wallet{UserID: user.ID, Balance: 100})
+
+	if err := repo.Deduct(ctx, user.ID, 30); err != nil {
+		t.Fatalf("deduct: %v", err)
+	}
+
+	w, _ := repo.GetByUserID(ctx, user.ID)
+	if w.Balance != 70 {
+		t.Fatalf("expected balance 70, got %d", w.Balance)
+	}
+}
+
+func TestDeductInsufficientBalance(t *testing.T) {
+	repo, user := setupTestDB(t)
+	ctx := context.Background()
+
+	repo.Create(ctx, &model.Wallet{UserID: user.ID, Balance: 10})
+
+	err := repo.Deduct(ctx, user.ID, 20)
+	if err == nil {
+		t.Fatal("expected error for insufficient balance")
+	}
+
+	w, _ := repo.GetByUserID(ctx, user.ID)
+	if w.Balance != 10 {
+		t.Fatalf("balance should be unchanged, got %d", w.Balance)
+	}
+}
+
+func TestDeductExactBalance(t *testing.T) {
+	repo, user := setupTestDB(t)
+	ctx := context.Background()
+
+	repo.Create(ctx, &model.Wallet{UserID: user.ID, Balance: 50})
+
+	if err := repo.Deduct(ctx, user.ID, 50); err != nil {
+		t.Fatalf("deduct exact balance: %v", err)
+	}
+
+	w, _ := repo.GetByUserID(ctx, user.ID)
+	if w.Balance != 0 {
+		t.Fatalf("expected balance 0, got %d", w.Balance)
+	}
+}

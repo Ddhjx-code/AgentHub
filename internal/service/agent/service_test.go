@@ -8,8 +8,8 @@ import (
 
 	"github.com/Ddhjx-code/AgentHub/internal/database"
 	"github.com/Ddhjx-code/AgentHub/internal/model"
-	"github.com/Ddhjx-code/AgentHub/pkg/errcode"
 	agentRepo "github.com/Ddhjx-code/AgentHub/internal/repository/agent"
+	"github.com/Ddhjx-code/AgentHub/pkg/errcode"
 )
 
 func setupTestService(t *testing.T) Service {
@@ -29,20 +29,29 @@ func setupTestService(t *testing.T) Service {
 	return NewService(ar, lg)
 }
 
-func TestCreateCozeAgent(t *testing.T) {
+func TestCreateAgent(t *testing.T) {
 	svc := setupTestService(t)
 	ctx := context.Background()
 
 	agent, err := svc.Create(ctx, CreateRequest{
-		Name:           "CozeBot",
-		Engine:         model.EngineCoze,
-		Tags:           []string{"ai"},
-		Cost:           10,
-		CozeWorkflowID: "wf_123",
-		CozeAPIKey:     "key_abc",
+		Name:      "TestBot",
+		Tags:      []string{"ai"},
+		Cost:      10,
+		ModelName: "deepseek-chat",
+		BaseURL:   "https://api.deepseek.com/v1",
+		APIKey:    "sk-test",
+		Tools: []ToolRequest{
+			{
+				Name:        "search",
+				Description: "Search the web",
+				Type:        model.ToolTypeCoze,
+				InputSchema: `{"type":"object"}`,
+				Config:      `{"workflow_id":"wf_123"}`,
+			},
+		},
 	})
 	if err != nil {
-		t.Fatalf("create coze agent: %v", err)
+		t.Fatalf("create agent: %v", err)
 	}
 	if agent.ID == 0 {
 		t.Fatal("expected non-zero ID")
@@ -55,47 +64,31 @@ func TestCreateCozeAgent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("admin get by id: %v", err)
 	}
-	if detail.CozeWorkflow == nil {
-		t.Fatal("expected coze workflow to be set")
+	if len(detail.Tools) != 1 {
+		t.Fatalf("expected 1 tool, got %d", len(detail.Tools))
 	}
-	if detail.CozeWorkflow.WorkflowID != "wf_123" {
-		t.Fatalf("expected wf_123, got %s", detail.CozeWorkflow.WorkflowID)
+	if detail.Tools[0].Name != "search" {
+		t.Fatalf("expected search, got %s", detail.Tools[0].Name)
 	}
 }
 
-func TestCreateN8NAgent(t *testing.T) {
+func TestCreateAgentNoTools(t *testing.T) {
 	svc := setupTestService(t)
 	ctx := context.Background()
 
 	agent, err := svc.Create(ctx, CreateRequest{
-		Name:          "N8NBot",
-		Engine:        model.EngineN8N,
-		N8NWebhookURL: "/webhook/test",
-		N8NTimeout:    60,
+		Name:      "PureLLM",
+		ModelName: "gpt-4o",
+		BaseURL:   "https://api.openai.com/v1",
+		APIKey:    "sk-test",
 	})
 	if err != nil {
-		t.Fatalf("create n8n agent: %v", err)
+		t.Fatalf("create agent: %v", err)
 	}
 
 	detail, _ := svc.AdminGetByID(ctx, agent.ID)
-	if detail.N8NWorkflow == nil {
-		t.Fatal("expected n8n workflow to be set")
-	}
-	if detail.N8NWorkflow.WebhookURL != "/webhook/test" {
-		t.Fatalf("expected /webhook/test, got %s", detail.N8NWorkflow.WebhookURL)
-	}
-}
-
-func TestCreateAgentInvalidEngine(t *testing.T) {
-	svc := setupTestService(t)
-	ctx := context.Background()
-
-	_, err := svc.Create(ctx, CreateRequest{
-		Name:   "BadBot",
-		Engine: "unknown",
-	})
-	if err != errcode.ErrInvalidEngine {
-		t.Fatalf("expected ErrInvalidEngine, got %v", err)
+	if len(detail.Tools) != 0 {
+		t.Fatalf("expected 0 tools, got %d", len(detail.Tools))
 	}
 }
 
@@ -104,17 +97,48 @@ func TestUpdateAgent(t *testing.T) {
 	ctx := context.Background()
 
 	agent, _ := svc.Create(ctx, CreateRequest{
-		Name:   "Original",
-		Engine: model.EngineCoze,
+		Name:      "Original",
+		ModelName: "deepseek-chat",
 	})
 
 	newName := "Updated"
-	updated, err := svc.Update(ctx, agent.ID, UpdateRequest{Name: &newName})
+	newModel := "gpt-4o"
+	updated, err := svc.Update(ctx, agent.ID, UpdateRequest{
+		Name:      &newName,
+		ModelName: &newModel,
+	})
 	if err != nil {
 		t.Fatalf("update agent: %v", err)
 	}
 	if updated.Name != "Updated" {
 		t.Fatalf("expected Updated, got %s", updated.Name)
+	}
+}
+
+func TestUpdateAgentWithTools(t *testing.T) {
+	svc := setupTestService(t)
+	ctx := context.Background()
+
+	agent, _ := svc.Create(ctx, CreateRequest{
+		Name: "ToolBot",
+		Tools: []ToolRequest{
+			{Name: "old_tool", Type: model.ToolTypeCoze, InputSchema: "{}", Config: "{}"},
+		},
+	})
+
+	_, err := svc.Update(ctx, agent.ID, UpdateRequest{
+		Tools: []ToolRequest{
+			{Name: "new_tool1", Type: model.ToolTypeCoze, InputSchema: "{}", Config: "{}"},
+			{Name: "new_tool2", Type: model.ToolTypeN8N, InputSchema: "{}", Config: "{}"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("update with tools: %v", err)
+	}
+
+	detail, _ := svc.AdminGetByID(ctx, agent.ID)
+	if len(detail.Tools) != 2 {
+		t.Fatalf("expected 2 tools, got %d", len(detail.Tools))
 	}
 }
 
@@ -133,10 +157,7 @@ func TestDeleteAgent(t *testing.T) {
 	svc := setupTestService(t)
 	ctx := context.Background()
 
-	agent, _ := svc.Create(ctx, CreateRequest{
-		Name:   "ToDelete",
-		Engine: model.EngineCoze,
-	})
+	agent, _ := svc.Create(ctx, CreateRequest{Name: "ToDelete"})
 
 	if err := svc.Delete(ctx, agent.ID); err != nil {
 		t.Fatalf("delete: %v", err)
@@ -162,10 +183,7 @@ func TestToggleStatus(t *testing.T) {
 	svc := setupTestService(t)
 	ctx := context.Background()
 
-	agent, _ := svc.Create(ctx, CreateRequest{
-		Name:   "ToggleBot",
-		Engine: model.EngineCoze,
-	})
+	agent, _ := svc.Create(ctx, CreateRequest{Name: "ToggleBot"})
 	if agent.Status != model.AgentStatusInactive {
 		t.Fatalf("expected inactive, got %s", agent.Status)
 	}
@@ -188,8 +206,8 @@ func TestAdminList(t *testing.T) {
 	svc := setupTestService(t)
 	ctx := context.Background()
 
-	svc.Create(ctx, CreateRequest{Name: "A1", Engine: model.EngineCoze})
-	a2, _ := svc.Create(ctx, CreateRequest{Name: "A2", Engine: model.EngineN8N})
+	svc.Create(ctx, CreateRequest{Name: "A1"})
+	a2, _ := svc.Create(ctx, CreateRequest{Name: "A2"})
 	svc.ToggleStatus(ctx, a2.ID)
 
 	agents, total, err := svc.AdminList(ctx, 1, 20)
@@ -208,8 +226,8 @@ func TestListActive(t *testing.T) {
 	svc := setupTestService(t)
 	ctx := context.Background()
 
-	svc.Create(ctx, CreateRequest{Name: "Inactive", Engine: model.EngineCoze})
-	active, _ := svc.Create(ctx, CreateRequest{Name: "Active", Engine: model.EngineCoze})
+	svc.Create(ctx, CreateRequest{Name: "Inactive"})
+	active, _ := svc.Create(ctx, CreateRequest{Name: "Active"})
 	svc.ToggleStatus(ctx, active.ID)
 
 	agents, total, err := svc.ListActive(ctx, 1, 20, "", "")
@@ -224,38 +242,11 @@ func TestListActive(t *testing.T) {
 	}
 }
 
-func TestListActiveWithCategoryFilter(t *testing.T) {
-	svc := setupTestService(t)
-	ctx := context.Background()
-
-	a1, _ := svc.Create(ctx, CreateRequest{Name: "Writer", Engine: model.EngineCoze})
-	svc.ToggleStatus(ctx, a1.ID)
-	cat := "writing"
-	svc.Update(ctx, a1.ID, UpdateRequest{Category: &cat})
-
-	a2, _ := svc.Create(ctx, CreateRequest{Name: "Coder", Engine: model.EngineCoze})
-	svc.ToggleStatus(ctx, a2.ID)
-	cat2 := "coding"
-	svc.Update(ctx, a2.ID, UpdateRequest{Category: &cat2})
-
-	agents, total, _ := svc.ListActive(ctx, 1, 20, "coding", "")
-	if total != 1 {
-		t.Fatalf("expected total 1, got %d", total)
-	}
-	if agents[0].Name != "Coder" {
-		t.Fatalf("expected Coder, got %s", agents[0].Name)
-	}
-}
-
 func TestGetByIDActive(t *testing.T) {
 	svc := setupTestService(t)
 	ctx := context.Background()
 
-	agent, _ := svc.Create(ctx, CreateRequest{
-		Name:           "ActiveBot",
-		Engine:         model.EngineCoze,
-		CozeWorkflowID: "wf_active",
-	})
+	agent, _ := svc.Create(ctx, CreateRequest{Name: "ActiveBot"})
 	svc.ToggleStatus(ctx, agent.ID)
 
 	detail, err := svc.GetByID(ctx, agent.ID)
@@ -271,10 +262,7 @@ func TestGetByIDInactive(t *testing.T) {
 	svc := setupTestService(t)
 	ctx := context.Background()
 
-	agent, _ := svc.Create(ctx, CreateRequest{
-		Name:   "InactiveBot",
-		Engine: model.EngineCoze,
-	})
+	agent, _ := svc.Create(ctx, CreateRequest{Name: "InactiveBot"})
 
 	_, err := svc.GetByID(ctx, agent.ID)
 	if err != errcode.ErrNotFound {

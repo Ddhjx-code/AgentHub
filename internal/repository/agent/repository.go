@@ -16,16 +16,14 @@ type Repository interface {
 	Update(ctx context.Context, agent *model.Agent) error
 	Delete(ctx context.Context, id int64) error
 	List(ctx context.Context, filter ListFilter) ([]*model.Agent, int, error)
+	IncrementCalls(ctx context.Context, id int64) error
 
-	CreateCozeWorkflow(ctx context.Context, wf *model.CozeWorkflow) error
-	GetCozeWorkflow(ctx context.Context, agentID int64) (*model.CozeWorkflow, error)
-	UpdateCozeWorkflow(ctx context.Context, wf *model.CozeWorkflow) error
-	DeleteCozeWorkflow(ctx context.Context, agentID int64) error
-
-	CreateN8NWorkflow(ctx context.Context, wf *model.N8NWorkflow) error
-	GetN8NWorkflow(ctx context.Context, agentID int64) (*model.N8NWorkflow, error)
-	UpdateN8NWorkflow(ctx context.Context, wf *model.N8NWorkflow) error
-	DeleteN8NWorkflow(ctx context.Context, agentID int64) error
+	CreateTool(ctx context.Context, tool *model.AgentTool) error
+	ListToolsByAgentID(ctx context.Context, agentID int64) ([]*model.AgentTool, error)
+	GetToolByID(ctx context.Context, id int64) (*model.AgentTool, error)
+	UpdateTool(ctx context.Context, tool *model.AgentTool) error
+	DeleteTool(ctx context.Context, id int64) error
+	DeleteToolsByAgentID(ctx context.Context, agentID int64) error
 }
 
 type ListFilter struct {
@@ -46,14 +44,15 @@ func NewRepository(db *sql.DB) Repository {
 
 func (r *repository) Create(ctx context.Context, agent *model.Agent) error {
 	query := `INSERT INTO agents (name, icon, color, category, short_desc, full_desc, tags,
-              cost, engine, status, prompt, temperature, max_tokens, rating, calls, featured,
-              speed, precision, created_at, updated_at)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+              cost, status, prompt, temperature, max_tokens, model_name, base_url, api_key,
+              rating, calls, featured, speed, precision, created_at, updated_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	now := time.Now()
 	result, err := r.db.ExecContext(ctx, query,
 		agent.Name, agent.Icon, agent.Color, agent.Category, agent.ShortDesc, agent.FullDesc,
-		tagsToJSON(agent.Tags), agent.Cost, agent.Engine, agent.Status, agent.Prompt,
-		agent.Temperature, agent.MaxTokens, agent.Rating, agent.Calls, boolToInt(agent.Featured),
+		tagsToJSON(agent.Tags), agent.Cost, agent.Status, agent.Prompt,
+		agent.Temperature, agent.MaxTokens, agent.ModelName, agent.BaseURL, agent.APIKey,
+		agent.Rating, agent.Calls, boolToInt(agent.Featured),
 		agent.Speed, agent.Precision, now, now)
 	if err != nil {
 		return fmt.Errorf("insert agent: %w", err)
@@ -70,22 +69,24 @@ func (r *repository) Create(ctx context.Context, agent *model.Agent) error {
 
 func (r *repository) GetByID(ctx context.Context, id int64) (*model.Agent, error) {
 	query := `SELECT id, name, icon, color, category, short_desc, full_desc, tags,
-              cost, engine, status, prompt, temperature, max_tokens, rating, calls, featured,
-              speed, precision, created_at, updated_at
+              cost, status, prompt, temperature, max_tokens, model_name, base_url, api_key,
+              rating, calls, featured, speed, precision, created_at, updated_at
               FROM agents WHERE id = ?`
 	return r.scanAgent(r.db.QueryRowContext(ctx, query, id))
 }
 
 func (r *repository) Update(ctx context.Context, agent *model.Agent) error {
 	query := `UPDATE agents SET name=?, icon=?, color=?, category=?, short_desc=?, full_desc=?,
-              tags=?, cost=?, engine=?, status=?, prompt=?, temperature=?, max_tokens=?,
+              tags=?, cost=?, status=?, prompt=?, temperature=?, max_tokens=?,
+              model_name=?, base_url=?, api_key=?,
               rating=?, calls=?, featured=?, speed=?, precision=?, updated_at=?
               WHERE id=?`
 	now := time.Now()
 	_, err := r.db.ExecContext(ctx, query,
 		agent.Name, agent.Icon, agent.Color, agent.Category, agent.ShortDesc, agent.FullDesc,
-		tagsToJSON(agent.Tags), agent.Cost, agent.Engine, agent.Status, agent.Prompt,
-		agent.Temperature, agent.MaxTokens, agent.Rating, agent.Calls, boolToInt(agent.Featured),
+		tagsToJSON(agent.Tags), agent.Cost, agent.Status, agent.Prompt,
+		agent.Temperature, agent.MaxTokens, agent.ModelName, agent.BaseURL, agent.APIKey,
+		agent.Rating, agent.Calls, boolToInt(agent.Featured),
 		agent.Speed, agent.Precision, now, agent.ID)
 	if err != nil {
 		return fmt.Errorf("update agent: %w", err)
@@ -112,8 +113,8 @@ func (r *repository) List(ctx context.Context, filter ListFilter) ([]*model.Agen
 	}
 
 	selectQuery := `SELECT id, name, icon, color, category, short_desc, full_desc, tags,
-                    cost, engine, status, prompt, temperature, max_tokens, rating, calls, featured,
-                    speed, precision, created_at, updated_at
+                    cost, status, prompt, temperature, max_tokens, model_name, base_url, api_key,
+                    rating, calls, featured, speed, precision, created_at, updated_at
                     FROM agents` + where + ` ORDER BY created_at DESC LIMIT ? OFFSET ?`
 
 	offset := (filter.Page - 1) * filter.Limit
@@ -139,96 +140,102 @@ func (r *repository) List(ctx context.Context, filter ListFilter) ([]*model.Agen
 	return agents, total, nil
 }
 
-// Coze workflow
-
-func (r *repository) CreateCozeWorkflow(ctx context.Context, wf *model.CozeWorkflow) error {
-	query := `INSERT INTO coze_workflows (agent_id, workflow_id, api_key, region, input_field, output_field)
-              VALUES (?, ?, ?, ?, ?, ?)`
-	_, err := r.db.ExecContext(ctx, query,
-		wf.AgentID, wf.WorkflowID, wf.APIKey, wf.Region, wf.InputField, wf.OutputField)
+func (r *repository) IncrementCalls(ctx context.Context, id int64) error {
+	_, err := r.db.ExecContext(ctx, `UPDATE agents SET calls = calls + 1 WHERE id = ?`, id)
 	if err != nil {
-		return fmt.Errorf("insert coze workflow: %w", err)
+		return fmt.Errorf("increment calls: %w", err)
 	}
 	return nil
 }
 
-func (r *repository) GetCozeWorkflow(ctx context.Context, agentID int64) (*model.CozeWorkflow, error) {
-	query := `SELECT agent_id, workflow_id, api_key, region, input_field, output_field
-              FROM coze_workflows WHERE agent_id = ?`
-	wf := &model.CozeWorkflow{}
-	err := r.db.QueryRowContext(ctx, query, agentID).Scan(
-		&wf.AgentID, &wf.WorkflowID, &wf.APIKey, &wf.Region, &wf.InputField, &wf.OutputField)
+// Tool methods
+
+func (r *repository) CreateTool(ctx context.Context, tool *model.AgentTool) error {
+	query := `INSERT INTO agent_tools (agent_id, name, description, type, input_schema, config, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?)`
+	now := time.Now()
+	result, err := r.db.ExecContext(ctx, query,
+		tool.AgentID, tool.Name, tool.Description, tool.Type,
+		string(tool.InputSchema), string(tool.Config), now)
+	if err != nil {
+		return fmt.Errorf("insert tool: %w", err)
+	}
+	id, err := result.LastInsertId()
+	if err != nil {
+		return fmt.Errorf("last insert id: %w", err)
+	}
+	tool.ID = id
+	tool.CreatedAt = now
+	return nil
+}
+
+func (r *repository) ListToolsByAgentID(ctx context.Context, agentID int64) ([]*model.AgentTool, error) {
+	query := `SELECT id, agent_id, name, description, type, input_schema, config, created_at
+              FROM agent_tools WHERE agent_id = ? ORDER BY id`
+	rows, err := r.db.QueryContext(ctx, query, agentID)
+	if err != nil {
+		return nil, fmt.Errorf("list tools: %w", err)
+	}
+	defer rows.Close()
+
+	var tools []*model.AgentTool
+	for rows.Next() {
+		tool := &model.AgentTool{}
+		var inputSchema, config string
+		err := rows.Scan(&tool.ID, &tool.AgentID, &tool.Name, &tool.Description,
+			&tool.Type, &inputSchema, &config, &tool.CreatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("scan tool: %w", err)
+		}
+		tool.InputSchema = json.RawMessage(inputSchema)
+		tool.Config = json.RawMessage(config)
+		tools = append(tools, tool)
+	}
+	return tools, rows.Err()
+}
+
+func (r *repository) GetToolByID(ctx context.Context, id int64) (*model.AgentTool, error) {
+	query := `SELECT id, agent_id, name, description, type, input_schema, config, created_at
+              FROM agent_tools WHERE id = ?`
+	tool := &model.AgentTool{}
+	var inputSchema, config string
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&tool.ID, &tool.AgentID, &tool.Name, &tool.Description,
+		&tool.Type, &inputSchema, &config, &tool.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("query coze workflow: %w", err)
+		return nil, fmt.Errorf("query tool: %w", err)
 	}
-	return wf, nil
+	tool.InputSchema = json.RawMessage(inputSchema)
+	tool.Config = json.RawMessage(config)
+	return tool, nil
 }
 
-func (r *repository) UpdateCozeWorkflow(ctx context.Context, wf *model.CozeWorkflow) error {
-	query := `UPDATE coze_workflows SET workflow_id=?, api_key=?, region=?, input_field=?, output_field=?
-              WHERE agent_id=?`
+func (r *repository) UpdateTool(ctx context.Context, tool *model.AgentTool) error {
+	query := `UPDATE agent_tools SET name=?, description=?, type=?, input_schema=?, config=? WHERE id=?`
 	_, err := r.db.ExecContext(ctx, query,
-		wf.WorkflowID, wf.APIKey, wf.Region, wf.InputField, wf.OutputField, wf.AgentID)
+		tool.Name, tool.Description, tool.Type,
+		string(tool.InputSchema), string(tool.Config), tool.ID)
 	if err != nil {
-		return fmt.Errorf("update coze workflow: %w", err)
+		return fmt.Errorf("update tool: %w", err)
 	}
 	return nil
 }
 
-func (r *repository) DeleteCozeWorkflow(ctx context.Context, agentID int64) error {
-	_, err := r.db.ExecContext(ctx, `DELETE FROM coze_workflows WHERE agent_id = ?`, agentID)
+func (r *repository) DeleteTool(ctx context.Context, id int64) error {
+	_, err := r.db.ExecContext(ctx, `DELETE FROM agent_tools WHERE id = ?`, id)
 	if err != nil {
-		return fmt.Errorf("delete coze workflow: %w", err)
+		return fmt.Errorf("delete tool: %w", err)
 	}
 	return nil
 }
 
-// N8N workflow
-
-func (r *repository) CreateN8NWorkflow(ctx context.Context, wf *model.N8NWorkflow) error {
-	query := `INSERT INTO n8n_workflows (agent_id, webhook_url, auth_type, auth_token, timeout, payload_tmpl)
-              VALUES (?, ?, ?, ?, ?, ?)`
-	_, err := r.db.ExecContext(ctx, query,
-		wf.AgentID, wf.WebhookURL, wf.AuthType, wf.AuthToken, wf.Timeout, wf.PayloadTmpl)
+func (r *repository) DeleteToolsByAgentID(ctx context.Context, agentID int64) error {
+	_, err := r.db.ExecContext(ctx, `DELETE FROM agent_tools WHERE agent_id = ?`, agentID)
 	if err != nil {
-		return fmt.Errorf("insert n8n workflow: %w", err)
-	}
-	return nil
-}
-
-func (r *repository) GetN8NWorkflow(ctx context.Context, agentID int64) (*model.N8NWorkflow, error) {
-	query := `SELECT agent_id, webhook_url, auth_type, auth_token, timeout, payload_tmpl
-              FROM n8n_workflows WHERE agent_id = ?`
-	wf := &model.N8NWorkflow{}
-	err := r.db.QueryRowContext(ctx, query, agentID).Scan(
-		&wf.AgentID, &wf.WebhookURL, &wf.AuthType, &wf.AuthToken, &wf.Timeout, &wf.PayloadTmpl)
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("query n8n workflow: %w", err)
-	}
-	return wf, nil
-}
-
-func (r *repository) UpdateN8NWorkflow(ctx context.Context, wf *model.N8NWorkflow) error {
-	query := `UPDATE n8n_workflows SET webhook_url=?, auth_type=?, auth_token=?, timeout=?, payload_tmpl=?
-              WHERE agent_id=?`
-	_, err := r.db.ExecContext(ctx, query,
-		wf.WebhookURL, wf.AuthType, wf.AuthToken, wf.Timeout, wf.PayloadTmpl, wf.AgentID)
-	if err != nil {
-		return fmt.Errorf("update n8n workflow: %w", err)
-	}
-	return nil
-}
-
-func (r *repository) DeleteN8NWorkflow(ctx context.Context, agentID int64) error {
-	_, err := r.db.ExecContext(ctx, `DELETE FROM n8n_workflows WHERE agent_id = ?`, agentID)
-	if err != nil {
-		return fmt.Errorf("delete n8n workflow: %w", err)
+		return fmt.Errorf("delete tools by agent: %w", err)
 	}
 	return nil
 }
@@ -260,8 +267,9 @@ func (r *repository) scanAgent(row *sql.Row) (*model.Agent, error) {
 	err := row.Scan(
 		&agent.ID, &agent.Name, &agent.Icon, &agent.Color, &agent.Category,
 		&agent.ShortDesc, &agent.FullDesc, &tagsJSON,
-		&agent.Cost, &agent.Engine, &agent.Status, &agent.Prompt,
-		&agent.Temperature, &agent.MaxTokens, &agent.Rating, &agent.Calls, &featuredInt,
+		&agent.Cost, &agent.Status, &agent.Prompt,
+		&agent.Temperature, &agent.MaxTokens, &agent.ModelName, &agent.BaseURL, &agent.APIKey,
+		&agent.Rating, &agent.Calls, &featuredInt,
 		&agent.Speed, &agent.Precision, &agent.CreatedAt, &agent.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -281,8 +289,9 @@ func (r *repository) scanAgentRow(rows *sql.Rows) (*model.Agent, error) {
 	err := rows.Scan(
 		&agent.ID, &agent.Name, &agent.Icon, &agent.Color, &agent.Category,
 		&agent.ShortDesc, &agent.FullDesc, &tagsJSON,
-		&agent.Cost, &agent.Engine, &agent.Status, &agent.Prompt,
-		&agent.Temperature, &agent.MaxTokens, &agent.Rating, &agent.Calls, &featuredInt,
+		&agent.Cost, &agent.Status, &agent.Prompt,
+		&agent.Temperature, &agent.MaxTokens, &agent.ModelName, &agent.BaseURL, &agent.APIKey,
+		&agent.Rating, &agent.Calls, &featuredInt,
 		&agent.Speed, &agent.Precision, &agent.CreatedAt, &agent.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("scan agent row: %w", err)

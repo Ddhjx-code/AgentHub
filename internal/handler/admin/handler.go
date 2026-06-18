@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"encoding/json"
 	"strconv"
 
 	agentSvc "github.com/Ddhjx-code/AgentHub/internal/service/agent"
@@ -17,64 +18,54 @@ func NewHandler(as agentSvc.Service) *Handler {
 	return &Handler{agentSvc: as}
 }
 
+type toolReq struct {
+	Name        string          `json:"name" binding:"required"`
+	Description string          `json:"description"`
+	Type        string          `json:"type" binding:"required"`
+	InputSchema json.RawMessage `json:"input_schema"`
+	Config      json.RawMessage `json:"config"`
+}
+
 type createAgentReq struct {
-	Name        string   `json:"name" binding:"required"`
-	Icon        string   `json:"icon"`
-	Color       string   `json:"color"`
-	Category    string   `json:"category"`
-	ShortDesc   string   `json:"short_desc"`
-	FullDesc    string   `json:"full_desc"`
-	Tags        []string `json:"tags"`
-	Cost        int      `json:"cost"`
-	Engine      string   `json:"engine" binding:"required"`
-	Prompt      string   `json:"prompt"`
-	Temperature float64  `json:"temperature"`
-	MaxTokens   int      `json:"max_tokens"`
-	Featured    bool     `json:"featured"`
-	Speed       string   `json:"speed"`
-	Precision   string   `json:"precision"`
-
-	CozeWorkflowID  string `json:"coze_workflow_id"`
-	CozeAPIKey      string `json:"coze_api_key"`
-	CozeRegion      string `json:"coze_region"`
-	CozeInputField  string `json:"coze_input_field"`
-	CozeOutputField string `json:"coze_output_field"`
-
-	N8NWebhookURL  string `json:"n8n_webhook_url"`
-	N8NAuthType    string `json:"n8n_auth_type"`
-	N8NAuthToken   string `json:"n8n_auth_token"`
-	N8NTimeout     int    `json:"n8n_timeout"`
-	N8NPayloadTmpl string `json:"n8n_payload_tmpl"`
+	Name        string    `json:"name" binding:"required"`
+	Icon        string    `json:"icon"`
+	Color       string    `json:"color"`
+	Category    string    `json:"category"`
+	ShortDesc   string    `json:"short_desc"`
+	FullDesc    string    `json:"full_desc"`
+	Tags        []string  `json:"tags"`
+	Cost        int       `json:"cost"`
+	Prompt      string    `json:"prompt"`
+	Temperature float64   `json:"temperature"`
+	MaxTokens   int       `json:"max_tokens"`
+	ModelName   string    `json:"model_name"`
+	BaseURL     string    `json:"base_url"`
+	APIKey      string    `json:"api_key"`
+	Featured    bool      `json:"featured"`
+	Speed       string    `json:"speed"`
+	Precision   string    `json:"precision"`
+	Tools       []toolReq `json:"tools"`
 }
 
 type updateAgentReq struct {
-	Name        *string  `json:"name"`
-	Icon        *string  `json:"icon"`
-	Color       *string  `json:"color"`
-	Category    *string  `json:"category"`
-	ShortDesc   *string  `json:"short_desc"`
-	FullDesc    *string  `json:"full_desc"`
-	Tags        []string `json:"tags"`
-	Cost        *int     `json:"cost"`
-	Engine      *string  `json:"engine"`
-	Prompt      *string  `json:"prompt"`
-	Temperature *float64 `json:"temperature"`
-	MaxTokens   *int     `json:"max_tokens"`
-	Featured    *bool    `json:"featured"`
-	Speed       *string  `json:"speed"`
-	Precision   *string  `json:"precision"`
-
-	CozeWorkflowID  *string `json:"coze_workflow_id"`
-	CozeAPIKey      *string `json:"coze_api_key"`
-	CozeRegion      *string `json:"coze_region"`
-	CozeInputField  *string `json:"coze_input_field"`
-	CozeOutputField *string `json:"coze_output_field"`
-
-	N8NWebhookURL  *string `json:"n8n_webhook_url"`
-	N8NAuthType    *string `json:"n8n_auth_type"`
-	N8NAuthToken   *string `json:"n8n_auth_token"`
-	N8NTimeout     *int    `json:"n8n_timeout"`
-	N8NPayloadTmpl *string `json:"n8n_payload_tmpl"`
+	Name        *string   `json:"name"`
+	Icon        *string   `json:"icon"`
+	Color       *string   `json:"color"`
+	Category    *string   `json:"category"`
+	ShortDesc   *string   `json:"short_desc"`
+	FullDesc    *string   `json:"full_desc"`
+	Tags        []string  `json:"tags"`
+	Cost        *int      `json:"cost"`
+	Prompt      *string   `json:"prompt"`
+	Temperature *float64  `json:"temperature"`
+	MaxTokens   *int      `json:"max_tokens"`
+	ModelName   *string   `json:"model_name"`
+	BaseURL     *string   `json:"base_url"`
+	APIKey      *string   `json:"api_key"`
+	Featured    *bool     `json:"featured"`
+	Speed       *string   `json:"speed"`
+	Precision   *string   `json:"precision"`
+	Tools       []toolReq `json:"tools"`
 }
 
 func (h *Handler) CreateAgent(c *gin.Context) {
@@ -84,33 +75,36 @@ func (h *Handler) CreateAgent(c *gin.Context) {
 		return
 	}
 
-	agent, err := h.agentSvc.Create(c.Request.Context(), agentSvc.CreateRequest{
-		Name:            req.Name,
-		Icon:            req.Icon,
-		Color:           req.Color,
-		Category:        req.Category,
-		ShortDesc:       req.ShortDesc,
-		FullDesc:        req.FullDesc,
-		Tags:            req.Tags,
-		Cost:            req.Cost,
-		Engine:          req.Engine,
-		Prompt:          req.Prompt,
-		Temperature:     req.Temperature,
-		MaxTokens:       req.MaxTokens,
-		Featured:        req.Featured,
-		Speed:           req.Speed,
-		Precision:       req.Precision,
-		CozeWorkflowID:  req.CozeWorkflowID,
-		CozeAPIKey:      req.CozeAPIKey,
-		CozeRegion:      req.CozeRegion,
-		CozeInputField:  req.CozeInputField,
-		CozeOutputField: req.CozeOutputField,
-		N8NWebhookURL:   req.N8NWebhookURL,
-		N8NAuthType:     req.N8NAuthType,
-		N8NAuthToken:    req.N8NAuthToken,
-		N8NTimeout:      req.N8NTimeout,
-		N8NPayloadTmpl:  req.N8NPayloadTmpl,
-	})
+	svcReq := agentSvc.CreateRequest{
+		Name:        req.Name,
+		Icon:        req.Icon,
+		Color:       req.Color,
+		Category:    req.Category,
+		ShortDesc:   req.ShortDesc,
+		FullDesc:    req.FullDesc,
+		Tags:        req.Tags,
+		Cost:        req.Cost,
+		Prompt:      req.Prompt,
+		Temperature: req.Temperature,
+		MaxTokens:   req.MaxTokens,
+		ModelName:   req.ModelName,
+		BaseURL:     req.BaseURL,
+		APIKey:      req.APIKey,
+		Featured:    req.Featured,
+		Speed:       req.Speed,
+		Precision:   req.Precision,
+	}
+	for _, t := range req.Tools {
+		svcReq.Tools = append(svcReq.Tools, agentSvc.ToolRequest{
+			Name:        t.Name,
+			Description: t.Description,
+			Type:        t.Type,
+			InputSchema: rawOrDefault(t.InputSchema, "{}"),
+			Config:      rawOrDefault(t.Config, "{}"),
+		})
+	}
+
+	agent, err := h.agentSvc.Create(c.Request.Context(), svcReq)
 	if err != nil {
 		handleError(c, err)
 		return
@@ -161,33 +155,40 @@ func (h *Handler) UpdateAgent(c *gin.Context) {
 		return
 	}
 
-	agent, err := h.agentSvc.Update(c.Request.Context(), id, agentSvc.UpdateRequest{
-		Name:            req.Name,
-		Icon:            req.Icon,
-		Color:           req.Color,
-		Category:        req.Category,
-		ShortDesc:       req.ShortDesc,
-		FullDesc:        req.FullDesc,
-		Tags:            req.Tags,
-		Cost:            req.Cost,
-		Engine:          req.Engine,
-		Prompt:          req.Prompt,
-		Temperature:     req.Temperature,
-		MaxTokens:       req.MaxTokens,
-		Featured:        req.Featured,
-		Speed:           req.Speed,
-		Precision:       req.Precision,
-		CozeWorkflowID:  req.CozeWorkflowID,
-		CozeAPIKey:      req.CozeAPIKey,
-		CozeRegion:      req.CozeRegion,
-		CozeInputField:  req.CozeInputField,
-		CozeOutputField: req.CozeOutputField,
-		N8NWebhookURL:   req.N8NWebhookURL,
-		N8NAuthType:     req.N8NAuthType,
-		N8NAuthToken:    req.N8NAuthToken,
-		N8NTimeout:      req.N8NTimeout,
-		N8NPayloadTmpl:  req.N8NPayloadTmpl,
-	})
+	svcReq := agentSvc.UpdateRequest{
+		Name:        req.Name,
+		Icon:        req.Icon,
+		Color:       req.Color,
+		Category:    req.Category,
+		ShortDesc:   req.ShortDesc,
+		FullDesc:    req.FullDesc,
+		Tags:        req.Tags,
+		Cost:        req.Cost,
+		Prompt:      req.Prompt,
+		Temperature: req.Temperature,
+		MaxTokens:   req.MaxTokens,
+		ModelName:   req.ModelName,
+		BaseURL:     req.BaseURL,
+		APIKey:      req.APIKey,
+		Featured:    req.Featured,
+		Speed:       req.Speed,
+		Precision:   req.Precision,
+	}
+	if req.Tools != nil {
+		var tools []agentSvc.ToolRequest
+		for _, t := range req.Tools {
+			tools = append(tools, agentSvc.ToolRequest{
+				Name:        t.Name,
+				Description: t.Description,
+				Type:        t.Type,
+				InputSchema: rawOrDefault(t.InputSchema, "{}"),
+				Config:      rawOrDefault(t.Config, "{}"),
+			})
+		}
+		svcReq.Tools = tools
+	}
+
+	agent, err := h.agentSvc.Update(c.Request.Context(), id, svcReq)
 	if err != nil {
 		handleError(c, err)
 		return
@@ -246,4 +247,11 @@ func handleError(c *gin.Context, err error) {
 		return
 	}
 	response.Error(c, errcode.ErrInternalServer)
+}
+
+func rawOrDefault(raw json.RawMessage, def string) string {
+	if len(raw) == 0 {
+		return def
+	}
+	return string(raw)
 }

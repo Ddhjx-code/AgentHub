@@ -3,6 +3,7 @@ package router
 import (
 	"github.com/Ddhjx-code/AgentHub/internal/handler/admin"
 	agentHandler "github.com/Ddhjx-code/AgentHub/internal/handler/agent"
+	chatHandler "github.com/Ddhjx-code/AgentHub/internal/handler/chat"
 	"github.com/Ddhjx-code/AgentHub/internal/handler/user"
 	"github.com/Ddhjx-code/AgentHub/internal/middleware"
 	userRepo "github.com/Ddhjx-code/AgentHub/internal/repository/user"
@@ -16,6 +17,7 @@ func Setup(
 	userHandler *user.Handler,
 	agentH *agentHandler.Handler,
 	adminH *admin.Handler,
+	chatH *chatHandler.Handler,
 ) {
 	engine.Use(middleware.CORS())
 
@@ -39,6 +41,14 @@ func Setup(
 			{
 				agentGroup.GET("", agentH.List)
 				agentGroup.GET("/:id", agentH.Detail)
+				agentGroup.POST("/:id/chat", chatH.SendMessage)
+			}
+
+			convGroup := protected.Group("/conversations")
+			{
+				convGroup.GET("", chatH.ListConversations)
+				convGroup.GET("/:id/messages", chatH.GetMessages)
+				convGroup.DELETE("/:id", chatH.DeleteConversation)
 			}
 
 			adminGroup := protected.Group("/admin")
