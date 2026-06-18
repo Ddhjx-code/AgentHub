@@ -22,4 +22,5 @@ var (
 	ErrInvalidPassword  = &ErrCode{Code: 4005, Message: "incorrect password"}
 	ErrTokenExpired     = &ErrCode{Code: 4006, Message: "token expired"}
 	ErrTokenInvalid     = &ErrCode{Code: 4007, Message: "invalid token"}
+	ErrInvalidEngine    = &ErrCode{Code: 4008, Message: "invalid engine type"}
 )

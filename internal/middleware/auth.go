@@ -13,7 +13,10 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-const UserIDKey = "user_id"
+const (
+	UserIDKey   = "user_id"
+	UserRoleKey = "user_role"
+)
 
 func JWTAuth(secret string, ur userRepo.Repository) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -70,6 +73,19 @@ func JWTAuth(secret string, ur userRepo.Repository) gin.HandlerFunc {
 		}
 
 		c.Set(UserIDKey, userID)
+		c.Set(UserRoleKey, user.Role)
+		c.Next()
+	}
+}
+
+func RequireAdmin() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		role, exists := c.Get(UserRoleKey)
+		if !exists || role.(string) != model.UserRoleAdmin {
+			response.Error(c, errcode.ErrForbidden)
+			c.Abort()
+			return
+		}
 		c.Next()
 	}
 }

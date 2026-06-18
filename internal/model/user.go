@@ -8,6 +8,7 @@ type User struct {
 	Name      string    `json:"name" db:"name"`
 	Password  string    `json:"-" db:"password"`
 	Avatar    string    `json:"avatar" db:"avatar"`
+	Role      string    `json:"role" db:"role"`
 	Status    string    `json:"status" db:"status"`
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
@@ -16,4 +17,7 @@ type User struct {
 const (
 	UserStatusActive = "active"
 	UserStatusBanned = "banned"
+
+	UserRoleUser  = "user"
+	UserRoleAdmin = "admin"
 )
