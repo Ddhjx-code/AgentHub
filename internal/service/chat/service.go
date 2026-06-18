@@ -13,6 +13,7 @@ import (
 	msgRepo "github.com/Ddhjx-code/AgentHub/internal/repository/message"
 	txRepo "github.com/Ddhjx-code/AgentHub/internal/repository/transaction"
 	walletRepo "github.com/Ddhjx-code/AgentHub/internal/repository/wallet"
+	kbSvc "github.com/Ddhjx-code/AgentHub/internal/service/knowledge"
 	"github.com/Ddhjx-code/AgentHub/internal/tool"
 	"github.com/Ddhjx-code/AgentHub/pkg/errcode"
 )
@@ -36,14 +37,15 @@ type SendMessageResponse struct {
 }
 
 type service struct {
-	agentRepo agentRepo.Repository
-	convRepo  convRepo.Repository
-	msgRepo   msgRepo.Repository
+	agentRepo  agentRepo.Repository
+	convRepo   convRepo.Repository
+	msgRepo    msgRepo.Repository
 	walletRepo walletRepo.Repository
-	txRepo    txRepo.Repository
-	llmClient llm.Client
-	toolExec  tool.Executor
-	logger    *slog.Logger
+	txRepo     txRepo.Repository
+	llmClient  llm.Client
+	toolExec   tool.Executor
+	kbSvc      kbSvc.Service
+	logger     *slog.Logger
 }
 
 func NewService(
@@ -54,6 +56,7 @@ func NewService(
 	tr txRepo.Repository,
 	lc llm.Client,
 	te tool.Executor,
+	ks kbSvc.Service,
 	logger *slog.Logger,
 ) Service {
 	return &service{
@@ -64,6 +67,7 @@ func NewService(
 		txRepo:     tr,
 		llmClient:  lc,
 		toolExec:   te,
+		kbSvc:      ks,
 		logger:     logger,
 	}
 }
@@ -132,8 +136,34 @@ func (s *service) SendMessage(ctx context.Context, userID, agentID int64, conver
 		return nil, fmt.Errorf("list tools: %w", err)
 	}
 
-	messages := buildLLMMessages(agent.Prompt, history)
+	systemPrompt := agent.Prompt
+	hasKB := false
+
+	if s.kbSvc != nil {
+		results, err := s.kbSvc.Search(ctx, agentID, content, 5)
+		if err != nil {
+			s.logger.Error("RAG search failed", "agent_id", agentID, "error", err)
+		}
+		if len(results) > 0 {
+			ragContext := kbSvc.FormatSearchResults(results)
+			systemPrompt = systemPrompt + "\n\n## Reference Knowledge\n" + ragContext
+			hasKB = true
+		}
+	}
+
+	messages := buildLLMMessages(systemPrompt, history)
 	llmTools := buildLLMTools(tools)
+
+	if hasKB {
+		llmTools = append(llmTools, llm.Tool{
+			Type: "function",
+			Function: llm.ToolFunction{
+				Name:        model.ToolTypeKnowledgeSearch,
+				Description: "Search the knowledge base for relevant information. Use when you need more details about a topic.",
+				Parameters:  json.RawMessage(`{"type":"object","properties":{"query":{"type":"string","description":"search query"}},"required":["query"]}`),
+			},
+		})
+	}
 
 	reply, err := s.llmLoop(ctx, agent, tools, messages, llmTools, convID)
 	if err != nil {
@@ -206,17 +236,21 @@ func (s *service) llmLoop(ctx context.Context, agent *model.Agent, tools []*mode
 		messages = append(messages, choice.Message)
 
 		for _, tc := range choice.Message.ToolCalls {
-			agentTool := findTool(tools, tc.Function.Name)
 			var result string
-			if agentTool != nil {
-				var execErr error
-				result, execErr = s.toolExec.Execute(ctx, agentTool.Type, agentTool.Config, tc.Function.Arguments)
-				if execErr != nil {
-					result = fmt.Sprintf("Tool execution error: %s", execErr.Error())
-					s.logger.Error("tool execution failed", "tool", tc.Function.Name, "error", execErr)
-				}
+			if tc.Function.Name == model.ToolTypeKnowledgeSearch && s.kbSvc != nil {
+				result = s.handleKnowledgeSearch(ctx, agent.ID, tc.Function.Arguments)
 			} else {
-				result = fmt.Sprintf("Tool %q not found", tc.Function.Name)
+				agentTool := findTool(tools, tc.Function.Name)
+				if agentTool != nil {
+					var execErr error
+					result, execErr = s.toolExec.Execute(ctx, agentTool.Type, agentTool.Config, tc.Function.Arguments)
+					if execErr != nil {
+						result = fmt.Sprintf("Tool execution error: %s", execErr.Error())
+						s.logger.Error("tool execution failed", "tool", tc.Function.Name, "error", execErr)
+					}
+				} else {
+					result = fmt.Sprintf("Tool %q not found", tc.Function.Name)
+				}
 			}
 
 			toolMsg := &model.Message{
@@ -324,4 +358,27 @@ func findTool(tools []*model.AgentTool, name string) *model.AgentTool {
 		}
 	}
 	return nil
+}
+
+func (s *service) handleKnowledgeSearch(ctx context.Context, agentID int64, arguments string) string {
+	var args struct {
+		Query string `json:"query"`
+	}
+	if err := json.Unmarshal([]byte(arguments), &args); err != nil {
+		return "invalid search query"
+	}
+	if args.Query == "" {
+		return "empty search query"
+	}
+
+	results, err := s.kbSvc.Search(ctx, agentID, args.Query, 5)
+	if err != nil {
+		s.logger.Error("knowledge search failed", "agent_id", agentID, "error", err)
+		return "knowledge search failed"
+	}
+	if len(results) == 0 {
+		return "no relevant information found"
+	}
+
+	return kbSvc.FormatSearchResults(results)
 }

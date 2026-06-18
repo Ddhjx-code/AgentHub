@@ -54,6 +54,11 @@ func Migrate(db *sql.DB) error {
 		createConversationsTable,
 		createMessagesTable,
 		createTransactionsTable,
+		createKnowledgeBasesTable,
+		createDocumentsTable,
+		createChunksTable,
+		createChunksIndex,
+		createAgentKnowledgeBasesTable,
 	}
 	for _, m := range migrations {
 		if _, err := db.Exec(m); err != nil {
@@ -255,5 +260,65 @@ CREATE TABLE IF NOT EXISTS transactions (
     note       TEXT    NOT NULL DEFAULT '',
     created_at DATETIME NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (user_id) REFERENCES users(id)
+);
+`
+
+const createKnowledgeBasesTable = `
+CREATE TABLE IF NOT EXISTS knowledge_bases (
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    name               TEXT    NOT NULL,
+    description        TEXT    NOT NULL DEFAULT '',
+    embedding_base_url TEXT    NOT NULL DEFAULT '',
+    embedding_api_key  TEXT    NOT NULL DEFAULT '',
+    embedding_model    TEXT    NOT NULL DEFAULT '',
+    chunk_size         INTEGER NOT NULL DEFAULT 512,
+    chunk_overlap      INTEGER NOT NULL DEFAULT 64,
+    dimension          INTEGER NOT NULL DEFAULT 0,
+    status             TEXT    NOT NULL DEFAULT 'active',
+    created_at         DATETIME NOT NULL DEFAULT (datetime('now')),
+    updated_at         DATETIME NOT NULL DEFAULT (datetime('now'))
+);
+`
+
+const createDocumentsTable = `
+CREATE TABLE IF NOT EXISTS documents (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    knowledge_base_id INTEGER NOT NULL,
+    name              TEXT    NOT NULL,
+    content           TEXT    NOT NULL DEFAULT '',
+    char_count        INTEGER NOT NULL DEFAULT 0,
+    chunk_count       INTEGER NOT NULL DEFAULT 0,
+    status            TEXT    NOT NULL DEFAULT 'pending',
+    created_at        DATETIME NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (knowledge_base_id) REFERENCES knowledge_bases(id) ON DELETE CASCADE
+);
+`
+
+const createChunksTable = `
+CREATE TABLE IF NOT EXISTS chunks (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    document_id       INTEGER NOT NULL,
+    knowledge_base_id INTEGER NOT NULL,
+    chunk_index       INTEGER NOT NULL DEFAULT 0,
+    content           TEXT    NOT NULL DEFAULT '',
+    embedding         BLOB,
+    created_at        DATETIME NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE,
+    FOREIGN KEY (knowledge_base_id) REFERENCES knowledge_bases(id) ON DELETE CASCADE
+);
+`
+
+const createChunksIndex = `
+CREATE INDEX IF NOT EXISTS idx_chunks_kb_id ON chunks(knowledge_base_id);
+`
+
+const createAgentKnowledgeBasesTable = `
+CREATE TABLE IF NOT EXISTS agent_knowledge_bases (
+    agent_id          INTEGER NOT NULL,
+    knowledge_base_id INTEGER NOT NULL,
+    created_at        DATETIME NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (agent_id, knowledge_base_id),
+    FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE,
+    FOREIGN KEY (knowledge_base_id) REFERENCES knowledge_bases(id) ON DELETE CASCADE
 );
 `
