@@ -31,25 +31,24 @@ type CreateRequest struct {
 	FullDesc    string
 	Tags        []string
 	Cost        int
-	Engine      string
 	Prompt      string
 	Temperature float64
 	MaxTokens   int
+	ModelName   string
+	BaseURL     string
+	APIKey      string
 	Featured    bool
 	Speed       string
 	Precision   string
+	Tools       []ToolRequest
+}
 
-	CozeWorkflowID  string
-	CozeAPIKey      string
-	CozeRegion      string
-	CozeInputField  string
-	CozeOutputField string
-
-	N8NWebhookURL  string
-	N8NAuthType    string
-	N8NAuthToken   string
-	N8NTimeout     int
-	N8NPayloadTmpl string
+type ToolRequest struct {
+	Name        string
+	Description string
+	Type        string
+	InputSchema string
+	Config      string
 }
 
 type UpdateRequest struct {
@@ -61,31 +60,21 @@ type UpdateRequest struct {
 	FullDesc    *string
 	Tags        []string
 	Cost        *int
-	Engine      *string
 	Prompt      *string
 	Temperature *float64
 	MaxTokens   *int
+	ModelName   *string
+	BaseURL     *string
+	APIKey      *string
 	Featured    *bool
 	Speed       *string
 	Precision   *string
-
-	CozeWorkflowID  *string
-	CozeAPIKey      *string
-	CozeRegion      *string
-	CozeInputField  *string
-	CozeOutputField *string
-
-	N8NWebhookURL  *string
-	N8NAuthType    *string
-	N8NAuthToken   *string
-	N8NTimeout     *int
-	N8NPayloadTmpl *string
+	Tools       []ToolRequest
 }
 
 type AgentDetail struct {
 	*model.Agent
-	CozeWorkflow *model.CozeWorkflow `json:"coze_workflow,omitempty"`
-	N8NWorkflow  *model.N8NWorkflow  `json:"n8n_workflow,omitempty"`
+	Tools []*model.AgentTool `json:"tools"`
 }
 
 type service struct {
@@ -98,10 +87,6 @@ func NewService(ar agentRepo.Repository, logger *slog.Logger) Service {
 }
 
 func (s *service) Create(ctx context.Context, req CreateRequest) (*model.Agent, error) {
-	if req.Engine != model.EngineCoze && req.Engine != model.EngineN8N {
-		return nil, errcode.ErrInvalidEngine
-	}
-
 	agent := &model.Agent{
 		Name:        req.Name,
 		Icon:        req.Icon,
@@ -111,11 +96,13 @@ func (s *service) Create(ctx context.Context, req CreateRequest) (*model.Agent, 
 		FullDesc:    req.FullDesc,
 		Tags:        req.Tags,
 		Cost:        req.Cost,
-		Engine:      req.Engine,
 		Status:      model.AgentStatusInactive,
 		Prompt:      req.Prompt,
 		Temperature: req.Temperature,
 		MaxTokens:   req.MaxTokens,
+		ModelName:   req.ModelName,
+		BaseURL:     req.BaseURL,
+		APIKey:      req.APIKey,
 		Featured:    req.Featured,
 		Speed:       req.Speed,
 		Precision:   req.Precision,
@@ -125,11 +112,21 @@ func (s *service) Create(ctx context.Context, req CreateRequest) (*model.Agent, 
 		return nil, fmt.Errorf("create agent: %w", err)
 	}
 
-	if err := s.createWorkflow(ctx, agent.ID, req); err != nil {
-		return nil, fmt.Errorf("create workflow: %w", err)
+	for _, t := range req.Tools {
+		tool := &model.AgentTool{
+			AgentID:     agent.ID,
+			Name:        t.Name,
+			Description: t.Description,
+			Type:        t.Type,
+			InputSchema: []byte(t.InputSchema),
+			Config:      []byte(t.Config),
+		}
+		if err := s.agentRepo.CreateTool(ctx, tool); err != nil {
+			return nil, fmt.Errorf("create tool %q: %w", t.Name, err)
+		}
 	}
 
-	s.logger.Info("agent created", "agent_id", agent.ID, "engine", agent.Engine)
+	s.logger.Info("agent created", "agent_id", agent.ID)
 	return agent, nil
 }
 
@@ -142,30 +139,29 @@ func (s *service) Update(ctx context.Context, id int64, req UpdateRequest) (*mod
 		return nil, errcode.ErrNotFound
 	}
 
-	oldEngine := agent.Engine
 	applyUpdate(agent, req)
-
-	if req.Engine != nil && *req.Engine != oldEngine {
-		if *req.Engine != model.EngineCoze && *req.Engine != model.EngineN8N {
-			return nil, errcode.ErrInvalidEngine
-		}
-		if oldEngine == model.EngineCoze {
-			s.agentRepo.DeleteCozeWorkflow(ctx, id)
-		} else {
-			s.agentRepo.DeleteN8NWorkflow(ctx, id)
-		}
-		createReq := workflowFromUpdate(id, req)
-		if err := s.createWorkflowFromParts(ctx, *req.Engine, createReq); err != nil {
-			return nil, fmt.Errorf("create new workflow: %w", err)
-		}
-	} else {
-		if err := s.updateWorkflow(ctx, agent.ID, agent.Engine, req); err != nil {
-			return nil, fmt.Errorf("update workflow: %w", err)
-		}
-	}
 
 	if err := s.agentRepo.Update(ctx, agent); err != nil {
 		return nil, fmt.Errorf("update agent: %w", err)
+	}
+
+	if req.Tools != nil {
+		if err := s.agentRepo.DeleteToolsByAgentID(ctx, id); err != nil {
+			return nil, fmt.Errorf("delete old tools: %w", err)
+		}
+		for _, t := range req.Tools {
+			tool := &model.AgentTool{
+				AgentID:     id,
+				Name:        t.Name,
+				Description: t.Description,
+				Type:        t.Type,
+				InputSchema: []byte(t.InputSchema),
+				Config:      []byte(t.Config),
+			}
+			if err := s.agentRepo.CreateTool(ctx, tool); err != nil {
+				return nil, fmt.Errorf("create tool %q: %w", t.Name, err)
+			}
+		}
 	}
 
 	return agent, nil
@@ -178,6 +174,9 @@ func (s *service) Delete(ctx context.Context, id int64) error {
 	}
 	if agent == nil {
 		return errcode.ErrNotFound
+	}
+	if err := s.agentRepo.DeleteToolsByAgentID(ctx, id); err != nil {
+		return fmt.Errorf("delete tools: %w", err)
 	}
 	if err := s.agentRepo.Delete(ctx, id); err != nil {
 		return fmt.Errorf("delete agent: %w", err)
@@ -254,189 +253,14 @@ func (s *service) GetByID(ctx context.Context, id int64) (*AgentDetail, error) {
 }
 
 func (s *service) buildDetail(ctx context.Context, agent *model.Agent) (*AgentDetail, error) {
-	detail := &AgentDetail{Agent: agent}
-	switch agent.Engine {
-	case model.EngineCoze:
-		wf, err := s.agentRepo.GetCozeWorkflow(ctx, agent.ID)
-		if err != nil {
-			return nil, fmt.Errorf("get coze workflow: %w", err)
-		}
-		detail.CozeWorkflow = wf
-	case model.EngineN8N:
-		wf, err := s.agentRepo.GetN8NWorkflow(ctx, agent.ID)
-		if err != nil {
-			return nil, fmt.Errorf("get n8n workflow: %w", err)
-		}
-		detail.N8NWorkflow = wf
+	tools, err := s.agentRepo.ListToolsByAgentID(ctx, agent.ID)
+	if err != nil {
+		return nil, fmt.Errorf("list tools: %w", err)
 	}
-	return detail, nil
-}
-
-func (s *service) createWorkflow(ctx context.Context, agentID int64, req CreateRequest) error {
-	switch req.Engine {
-	case model.EngineCoze:
-		return s.agentRepo.CreateCozeWorkflow(ctx, &model.CozeWorkflow{
-			AgentID:     agentID,
-			WorkflowID:  req.CozeWorkflowID,
-			APIKey:      req.CozeAPIKey,
-			Region:      req.CozeRegion,
-			InputField:  req.CozeInputField,
-			OutputField: req.CozeOutputField,
-		})
-	case model.EngineN8N:
-		timeout := req.N8NTimeout
-		if timeout == 0 {
-			timeout = 30
-		}
-		return s.agentRepo.CreateN8NWorkflow(ctx, &model.N8NWorkflow{
-			AgentID:     agentID,
-			WebhookURL:  req.N8NWebhookURL,
-			AuthType:    req.N8NAuthType,
-			AuthToken:   req.N8NAuthToken,
-			Timeout:     timeout,
-			PayloadTmpl: req.N8NPayloadTmpl,
-		})
+	if tools == nil {
+		tools = []*model.AgentTool{}
 	}
-	return nil
-}
-
-type workflowParts struct {
-	CozeWorkflowID  string
-	CozeAPIKey      string
-	CozeRegion      string
-	CozeInputField  string
-	CozeOutputField string
-	N8NWebhookURL   string
-	N8NAuthType     string
-	N8NAuthToken    string
-	N8NTimeout      int
-	N8NPayloadTmpl  string
-}
-
-func workflowFromUpdate(agentID int64, req UpdateRequest) workflowParts {
-	var p workflowParts
-	if req.CozeWorkflowID != nil {
-		p.CozeWorkflowID = *req.CozeWorkflowID
-	}
-	if req.CozeAPIKey != nil {
-		p.CozeAPIKey = *req.CozeAPIKey
-	}
-	if req.CozeRegion != nil {
-		p.CozeRegion = *req.CozeRegion
-	}
-	if req.CozeInputField != nil {
-		p.CozeInputField = *req.CozeInputField
-	}
-	if req.CozeOutputField != nil {
-		p.CozeOutputField = *req.CozeOutputField
-	}
-	if req.N8NWebhookURL != nil {
-		p.N8NWebhookURL = *req.N8NWebhookURL
-	}
-	if req.N8NAuthType != nil {
-		p.N8NAuthType = *req.N8NAuthType
-	}
-	if req.N8NAuthToken != nil {
-		p.N8NAuthToken = *req.N8NAuthToken
-	}
-	if req.N8NTimeout != nil {
-		p.N8NTimeout = *req.N8NTimeout
-	}
-	if req.N8NPayloadTmpl != nil {
-		p.N8NPayloadTmpl = *req.N8NPayloadTmpl
-	}
-	return p
-}
-
-func (s *service) createWorkflowFromParts(ctx context.Context, engine string, p workflowParts) error {
-	switch engine {
-	case model.EngineCoze:
-		return s.agentRepo.CreateCozeWorkflow(ctx, &model.CozeWorkflow{
-			WorkflowID:  p.CozeWorkflowID,
-			APIKey:      p.CozeAPIKey,
-			Region:      p.CozeRegion,
-			InputField:  p.CozeInputField,
-			OutputField: p.CozeOutputField,
-		})
-	case model.EngineN8N:
-		timeout := p.N8NTimeout
-		if timeout == 0 {
-			timeout = 30
-		}
-		return s.agentRepo.CreateN8NWorkflow(ctx, &model.N8NWorkflow{
-			WebhookURL:  p.N8NWebhookURL,
-			AuthType:    p.N8NAuthType,
-			AuthToken:   p.N8NAuthToken,
-			Timeout:     timeout,
-			PayloadTmpl: p.N8NPayloadTmpl,
-		})
-	}
-	return nil
-}
-
-func (s *service) updateWorkflow(ctx context.Context, agentID int64, engine string, req UpdateRequest) error {
-	hasCozeUpdate := req.CozeWorkflowID != nil || req.CozeAPIKey != nil || req.CozeRegion != nil ||
-		req.CozeInputField != nil || req.CozeOutputField != nil
-	hasN8NUpdate := req.N8NWebhookURL != nil || req.N8NAuthType != nil || req.N8NAuthToken != nil ||
-		req.N8NTimeout != nil || req.N8NPayloadTmpl != nil
-
-	switch engine {
-	case model.EngineCoze:
-		if !hasCozeUpdate {
-			return nil
-		}
-		existing, err := s.agentRepo.GetCozeWorkflow(ctx, agentID)
-		if err != nil {
-			return err
-		}
-		if existing == nil {
-			return nil
-		}
-		if req.CozeWorkflowID != nil {
-			existing.WorkflowID = *req.CozeWorkflowID
-		}
-		if req.CozeAPIKey != nil {
-			existing.APIKey = *req.CozeAPIKey
-		}
-		if req.CozeRegion != nil {
-			existing.Region = *req.CozeRegion
-		}
-		if req.CozeInputField != nil {
-			existing.InputField = *req.CozeInputField
-		}
-		if req.CozeOutputField != nil {
-			existing.OutputField = *req.CozeOutputField
-		}
-		return s.agentRepo.UpdateCozeWorkflow(ctx, existing)
-	case model.EngineN8N:
-		if !hasN8NUpdate {
-			return nil
-		}
-		existing, err := s.agentRepo.GetN8NWorkflow(ctx, agentID)
-		if err != nil {
-			return err
-		}
-		if existing == nil {
-			return nil
-		}
-		if req.N8NWebhookURL != nil {
-			existing.WebhookURL = *req.N8NWebhookURL
-		}
-		if req.N8NAuthType != nil {
-			existing.AuthType = *req.N8NAuthType
-		}
-		if req.N8NAuthToken != nil {
-			existing.AuthToken = *req.N8NAuthToken
-		}
-		if req.N8NTimeout != nil {
-			existing.Timeout = *req.N8NTimeout
-		}
-		if req.N8NPayloadTmpl != nil {
-			existing.PayloadTmpl = *req.N8NPayloadTmpl
-		}
-		return s.agentRepo.UpdateN8NWorkflow(ctx, existing)
-	}
-	return nil
+	return &AgentDetail{Agent: agent, Tools: tools}, nil
 }
 
 func applyUpdate(agent *model.Agent, req UpdateRequest) {
@@ -464,9 +288,6 @@ func applyUpdate(agent *model.Agent, req UpdateRequest) {
 	if req.Cost != nil {
 		agent.Cost = *req.Cost
 	}
-	if req.Engine != nil {
-		agent.Engine = *req.Engine
-	}
 	if req.Prompt != nil {
 		agent.Prompt = *req.Prompt
 	}
@@ -475,6 +296,15 @@ func applyUpdate(agent *model.Agent, req UpdateRequest) {
 	}
 	if req.MaxTokens != nil {
 		agent.MaxTokens = *req.MaxTokens
+	}
+	if req.ModelName != nil {
+		agent.ModelName = *req.ModelName
+	}
+	if req.BaseURL != nil {
+		agent.BaseURL = *req.BaseURL
+	}
+	if req.APIKey != nil {
+		agent.APIKey = *req.APIKey
 	}
 	if req.Featured != nil {
 		agent.Featured = *req.Featured

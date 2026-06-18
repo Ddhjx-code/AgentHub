@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/Ddhjx-code/AgentHub/internal/database"
@@ -21,15 +22,17 @@ func setupTestDB(t *testing.T) Repository {
 	return NewRepository(db)
 }
 
-func newTestAgent(name, engine string) *model.Agent {
+func newTestAgent(name string) *model.Agent {
 	return &model.Agent{
 		Name:        name,
-		Engine:      engine,
 		Status:      model.AgentStatusInactive,
 		Tags:        []string{"test", "demo"},
 		Cost:        10,
 		Temperature: 0.7,
 		MaxTokens:   2048,
+		ModelName:   "deepseek-chat",
+		BaseURL:     "https://api.deepseek.com/v1",
+		APIKey:      "sk-test",
 	}
 }
 
@@ -37,7 +40,7 @@ func TestCreateAndGetByID(t *testing.T) {
 	repo := setupTestDB(t)
 	ctx := context.Background()
 
-	agent := newTestAgent("TestBot", model.EngineCoze)
+	agent := newTestAgent("TestBot")
 	if err := repo.Create(ctx, agent); err != nil {
 		t.Fatalf("create agent: %v", err)
 	}
@@ -55,8 +58,8 @@ func TestCreateAndGetByID(t *testing.T) {
 	if found.Name != "TestBot" {
 		t.Fatalf("expected name TestBot, got %s", found.Name)
 	}
-	if found.Engine != model.EngineCoze {
-		t.Fatalf("expected engine coze, got %s", found.Engine)
+	if found.ModelName != "deepseek-chat" {
+		t.Fatalf("expected model deepseek-chat, got %s", found.ModelName)
 	}
 }
 
@@ -77,11 +80,12 @@ func TestUpdateAgent(t *testing.T) {
 	repo := setupTestDB(t)
 	ctx := context.Background()
 
-	agent := newTestAgent("Original", model.EngineCoze)
+	agent := newTestAgent("Original")
 	repo.Create(ctx, agent)
 
 	agent.Name = "Updated"
 	agent.Cost = 50
+	agent.ModelName = "gpt-4o"
 	if err := repo.Update(ctx, agent); err != nil {
 		t.Fatalf("update agent: %v", err)
 	}
@@ -93,13 +97,16 @@ func TestUpdateAgent(t *testing.T) {
 	if found.Cost != 50 {
 		t.Fatalf("expected cost 50, got %d", found.Cost)
 	}
+	if found.ModelName != "gpt-4o" {
+		t.Fatalf("expected model gpt-4o, got %s", found.ModelName)
+	}
 }
 
 func TestDeleteAgent(t *testing.T) {
 	repo := setupTestDB(t)
 	ctx := context.Background()
 
-	agent := newTestAgent("ToDelete", model.EngineCoze)
+	agent := newTestAgent("ToDelete")
 	repo.Create(ctx, agent)
 
 	if err := repo.Delete(ctx, agent.ID); err != nil {
@@ -117,7 +124,7 @@ func TestListWithPagination(t *testing.T) {
 	ctx := context.Background()
 
 	for i := 0; i < 5; i++ {
-		repo.Create(ctx, newTestAgent("Bot", model.EngineCoze))
+		repo.Create(ctx, newTestAgent("Bot"))
 	}
 
 	agents, total, err := repo.List(ctx, ListFilter{Page: 1, Limit: 2})
@@ -136,12 +143,11 @@ func TestListFilterByStatus(t *testing.T) {
 	repo := setupTestDB(t)
 	ctx := context.Background()
 
-	active := newTestAgent("Active", model.EngineCoze)
+	active := newTestAgent("Active")
 	active.Status = model.AgentStatusActive
 	repo.Create(ctx, active)
 
-	inactive := newTestAgent("Inactive", model.EngineCoze)
-	repo.Create(ctx, inactive)
+	repo.Create(ctx, newTestAgent("Inactive"))
 
 	agents, total, _ := repo.List(ctx, ListFilter{Status: model.AgentStatusActive, Page: 1, Limit: 20})
 	if total != 1 {
@@ -156,11 +162,11 @@ func TestListFilterByCategory(t *testing.T) {
 	repo := setupTestDB(t)
 	ctx := context.Background()
 
-	a1 := newTestAgent("A1", model.EngineCoze)
+	a1 := newTestAgent("A1")
 	a1.Category = "writing"
 	repo.Create(ctx, a1)
 
-	a2 := newTestAgent("A2", model.EngineCoze)
+	a2 := newTestAgent("A2")
 	a2.Category = "coding"
 	repo.Create(ctx, a2)
 
@@ -177,11 +183,11 @@ func TestListFilterByTag(t *testing.T) {
 	repo := setupTestDB(t)
 	ctx := context.Background()
 
-	a1 := newTestAgent("A1", model.EngineCoze)
+	a1 := newTestAgent("A1")
 	a1.Tags = []string{"ai", "writing"}
 	repo.Create(ctx, a1)
 
-	a2 := newTestAgent("A2", model.EngineCoze)
+	a2 := newTestAgent("A2")
 	a2.Tags = []string{"ai", "coding"}
 	repo.Create(ctx, a2)
 
@@ -194,118 +200,128 @@ func TestListFilterByTag(t *testing.T) {
 	}
 }
 
-func TestCozeWorkflowCRUD(t *testing.T) {
+func TestToolCRUD(t *testing.T) {
 	repo := setupTestDB(t)
 	ctx := context.Background()
 
-	agent := newTestAgent("CozeBot", model.EngineCoze)
+	agent := newTestAgent("ToolBot")
 	repo.Create(ctx, agent)
 
-	wf := &model.CozeWorkflow{
+	tool := &model.AgentTool{
 		AgentID:     agent.ID,
-		WorkflowID:  "wf_123",
-		APIKey:      "key_secret",
-		Region:      "cn",
-		InputField:  "input",
-		OutputField: "output",
+		Name:        "search",
+		Description: "Search the web",
+		Type:        model.ToolTypeCoze,
+		InputSchema: json.RawMessage(`{"type":"object","properties":{"query":{"type":"string"}}}`),
+		Config:      json.RawMessage(`{"workflow_id":"wf_123","api_key":"key_abc"}`),
 	}
-	if err := repo.CreateCozeWorkflow(ctx, wf); err != nil {
-		t.Fatalf("create coze workflow: %v", err)
+	if err := repo.CreateTool(ctx, tool); err != nil {
+		t.Fatalf("create tool: %v", err)
+	}
+	if tool.ID == 0 {
+		t.Fatal("expected non-zero tool ID")
 	}
 
-	found, err := repo.GetCozeWorkflow(ctx, agent.ID)
+	found, err := repo.GetToolByID(ctx, tool.ID)
 	if err != nil {
-		t.Fatalf("get coze workflow: %v", err)
+		t.Fatalf("get tool: %v", err)
 	}
-	if found.WorkflowID != "wf_123" {
-		t.Fatalf("expected wf_123, got %s", found.WorkflowID)
-	}
-	if found.APIKey != "key_secret" {
-		t.Fatalf("expected key_secret, got %s", found.APIKey)
+	if found.Name != "search" {
+		t.Fatalf("expected search, got %s", found.Name)
 	}
 
-	found.WorkflowID = "wf_456"
-	if err := repo.UpdateCozeWorkflow(ctx, found); err != nil {
-		t.Fatalf("update coze workflow: %v", err)
+	tools, err := repo.ListToolsByAgentID(ctx, agent.ID)
+	if err != nil {
+		t.Fatalf("list tools: %v", err)
 	}
-	updated, _ := repo.GetCozeWorkflow(ctx, agent.ID)
-	if updated.WorkflowID != "wf_456" {
-		t.Fatalf("expected wf_456, got %s", updated.WorkflowID)
+	if len(tools) != 1 {
+		t.Fatalf("expected 1 tool, got %d", len(tools))
 	}
 
-	if err := repo.DeleteCozeWorkflow(ctx, agent.ID); err != nil {
-		t.Fatalf("delete coze workflow: %v", err)
+	tool.Description = "Updated description"
+	if err := repo.UpdateTool(ctx, tool); err != nil {
+		t.Fatalf("update tool: %v", err)
 	}
-	deleted, _ := repo.GetCozeWorkflow(ctx, agent.ID)
+	updated, _ := repo.GetToolByID(ctx, tool.ID)
+	if updated.Description != "Updated description" {
+		t.Fatalf("expected updated description, got %s", updated.Description)
+	}
+
+	if err := repo.DeleteTool(ctx, tool.ID); err != nil {
+		t.Fatalf("delete tool: %v", err)
+	}
+	deleted, _ := repo.GetToolByID(ctx, tool.ID)
 	if deleted != nil {
 		t.Fatal("expected nil after delete")
 	}
 }
 
-func TestN8NWorkflowCRUD(t *testing.T) {
+func TestDeleteToolsByAgentID(t *testing.T) {
 	repo := setupTestDB(t)
 	ctx := context.Background()
 
-	agent := newTestAgent("N8NBot", model.EngineN8N)
+	agent := newTestAgent("MultiToolBot")
 	repo.Create(ctx, agent)
 
-	wf := &model.N8NWorkflow{
-		AgentID:     agent.ID,
-		WebhookURL:  "/webhook/abc",
-		AuthType:    "bearer",
-		AuthToken:   "token_secret",
-		Timeout:     60,
-		PayloadTmpl: `{"input": "{{.input}}"}`,
-	}
-	if err := repo.CreateN8NWorkflow(ctx, wf); err != nil {
-		t.Fatalf("create n8n workflow: %v", err)
+	for _, name := range []string{"tool1", "tool2", "tool3"} {
+		repo.CreateTool(ctx, &model.AgentTool{
+			AgentID:     agent.ID,
+			Name:        name,
+			Type:        model.ToolTypeN8N,
+			InputSchema: json.RawMessage("{}"),
+			Config:      json.RawMessage("{}"),
+		})
 	}
 
-	found, err := repo.GetN8NWorkflow(ctx, agent.ID)
-	if err != nil {
-		t.Fatalf("get n8n workflow: %v", err)
-	}
-	if found.WebhookURL != "/webhook/abc" {
-		t.Fatalf("expected /webhook/abc, got %s", found.WebhookURL)
-	}
-	if found.Timeout != 60 {
-		t.Fatalf("expected timeout 60, got %d", found.Timeout)
+	tools, _ := repo.ListToolsByAgentID(ctx, agent.ID)
+	if len(tools) != 3 {
+		t.Fatalf("expected 3 tools, got %d", len(tools))
 	}
 
-	found.WebhookURL = "/webhook/xyz"
-	if err := repo.UpdateN8NWorkflow(ctx, found); err != nil {
-		t.Fatalf("update n8n workflow: %v", err)
+	if err := repo.DeleteToolsByAgentID(ctx, agent.ID); err != nil {
+		t.Fatalf("delete tools by agent: %v", err)
 	}
-	updated, _ := repo.GetN8NWorkflow(ctx, agent.ID)
-	if updated.WebhookURL != "/webhook/xyz" {
-		t.Fatalf("expected /webhook/xyz, got %s", updated.WebhookURL)
-	}
-
-	if err := repo.DeleteN8NWorkflow(ctx, agent.ID); err != nil {
-		t.Fatalf("delete n8n workflow: %v", err)
-	}
-	deleted, _ := repo.GetN8NWorkflow(ctx, agent.ID)
-	if deleted != nil {
-		t.Fatal("expected nil after delete")
+	tools, _ = repo.ListToolsByAgentID(ctx, agent.ID)
+	if len(tools) != 0 {
+		t.Fatalf("expected 0 tools, got %d", len(tools))
 	}
 }
 
-func TestCascadeDelete(t *testing.T) {
+func TestCascadeDeleteTools(t *testing.T) {
 	repo := setupTestDB(t)
 	ctx := context.Background()
 
-	agent := newTestAgent("CascadeBot", model.EngineCoze)
+	agent := newTestAgent("CascadeBot")
 	repo.Create(ctx, agent)
-	repo.CreateCozeWorkflow(ctx, &model.CozeWorkflow{
-		AgentID:    agent.ID,
-		WorkflowID: "cascade_wf",
+	repo.CreateTool(ctx, &model.AgentTool{
+		AgentID:     agent.ID,
+		Name:        "cascade_tool",
+		Type:        model.ToolTypeCoze,
+		InputSchema: json.RawMessage("{}"),
+		Config:      json.RawMessage("{}"),
 	})
 
 	repo.Delete(ctx, agent.ID)
 
-	wf, _ := repo.GetCozeWorkflow(ctx, agent.ID)
-	if wf != nil {
-		t.Fatal("expected workflow to be cascade deleted")
+	tools, _ := repo.ListToolsByAgentID(ctx, agent.ID)
+	if len(tools) != 0 {
+		t.Fatal("expected tools to be cascade deleted")
+	}
+}
+
+func TestIncrementCalls(t *testing.T) {
+	repo := setupTestDB(t)
+	ctx := context.Background()
+
+	agent := newTestAgent("CallBot")
+	repo.Create(ctx, agent)
+
+	repo.IncrementCalls(ctx, agent.ID)
+	repo.IncrementCalls(ctx, agent.ID)
+
+	found, _ := repo.GetByID(ctx, agent.ID)
+	if found.Calls != 2 {
+		t.Fatalf("expected 2 calls, got %d", found.Calls)
 	}
 }
 
@@ -313,7 +329,7 @@ func TestTagsJSONRoundTrip(t *testing.T) {
 	repo := setupTestDB(t)
 	ctx := context.Background()
 
-	agent := newTestAgent("TagBot", model.EngineCoze)
+	agent := newTestAgent("TagBot")
 	agent.Tags = []string{"alpha", "beta", "gamma"}
 	repo.Create(ctx, agent)
 
@@ -330,7 +346,7 @@ func TestFeaturedBoolRoundTrip(t *testing.T) {
 	repo := setupTestDB(t)
 	ctx := context.Background()
 
-	agent := newTestAgent("FeatBot", model.EngineCoze)
+	agent := newTestAgent("FeatBot")
 	agent.Featured = true
 	repo.Create(ctx, agent)
 

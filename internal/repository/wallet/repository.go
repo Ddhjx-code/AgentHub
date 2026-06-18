@@ -12,6 +12,7 @@ import (
 type Repository interface {
 	Create(ctx context.Context, wallet *model.Wallet) error
 	GetByUserID(ctx context.Context, userID int64) (*model.Wallet, error)
+	Deduct(ctx context.Context, userID int64, amount int) error
 }
 
 type repository struct {
@@ -50,4 +51,21 @@ func (r *repository) GetByUserID(ctx context.Context, userID int64) (*model.Wall
 		return nil, fmt.Errorf("query wallet by user_id: %w", err)
 	}
 	return w, nil
+}
+
+func (r *repository) Deduct(ctx context.Context, userID int64, amount int) error {
+	result, err := r.db.ExecContext(ctx,
+		`UPDATE wallets SET balance = balance - ?, updated_at = ? WHERE user_id = ? AND balance >= ?`,
+		amount, time.Now(), userID, amount)
+	if err != nil {
+		return fmt.Errorf("deduct wallet: %w", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("rows affected: %w", err)
+	}
+	if rows == 0 {
+		return fmt.Errorf("insufficient balance")
+	}
+	return nil
 }

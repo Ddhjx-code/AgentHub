@@ -23,4 +23,6 @@ var (
 	ErrTokenExpired     = &ErrCode{Code: 4006, Message: "token expired"}
 	ErrTokenInvalid     = &ErrCode{Code: 4007, Message: "invalid token"}
 	ErrInvalidEngine    = &ErrCode{Code: 4008, Message: "invalid engine type"}
+	ErrToolLoopLimit    = &ErrCode{Code: 4009, Message: "tool call loop limit exceeded"}
+	ErrLLMError         = &ErrCode{Code: 4010, Message: "LLM service error"}
 )
