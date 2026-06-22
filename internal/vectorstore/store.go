@@ -9,9 +9,12 @@ type SearchResult struct {
 	DocName   string
 }
 
+const DefaultMinScore float32 = 0.5
+
 type Store interface {
 	Store(ctx context.Context, knowledgeBaseID, documentID int64, chunks []ChunkData) error
-	Search(ctx context.Context, knowledgeBaseID int64, queryEmbedding []float32, topK int) ([]SearchResult, error)
+	Search(ctx context.Context, knowledgeBaseID int64, queryEmbedding []float32, topK int, minScore float32) ([]SearchResult, error)
+	SearchBM25(ctx context.Context, knowledgeBaseID int64, query string, topK int) ([]SearchResult, error)
 	DeleteByDocument(ctx context.Context, documentID int64) error
 	DeleteByKnowledgeBase(ctx context.Context, knowledgeBaseID int64) error
 }

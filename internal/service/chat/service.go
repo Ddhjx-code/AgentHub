@@ -146,7 +146,12 @@ func (s *service) SendMessage(ctx context.Context, userID, agentID int64, conver
 		}
 		if len(results) > 0 {
 			ragContext := kbSvc.FormatSearchResults(results)
-			systemPrompt = systemPrompt + "\n\n## Reference Knowledge\n" + ragContext
+			systemPrompt = systemPrompt +
+				"\n\n## Reference Knowledge\n" +
+				"The following are retrieved reference materials. " +
+				"If they are not relevant to the user's question, ignore them and answer based on your own knowledge. " +
+				"Do not fabricate information that is not present in the references.\n\n" +
+				ragContext
 			hasKB = true
 		}
 	}

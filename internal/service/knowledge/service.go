@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strings"
 	"unicode/utf8"
 
@@ -220,6 +221,11 @@ func (s *service) ListAgentKBs(ctx context.Context, agentID int64) ([]*model.Kno
 	return s.repo.ListKBsByAgentID(ctx, agentID)
 }
 
+const (
+	rrfK        = 60
+	retrieveTop = 20
+)
+
 func (s *service) Search(ctx context.Context, agentID int64, query string, topK int) ([]vectorstore.SearchResult, error) {
 	kbs, err := s.repo.ListKBsByAgentID(ctx, agentID)
 	if err != nil {
@@ -248,12 +254,18 @@ func (s *service) Search(ctx context.Context, agentID int64, query string, topK 
 			continue
 		}
 
-		results, err := s.vectorStore.Search(ctx, kb.ID, embeddings[0], topK)
+		vectorResults, err := s.vectorStore.Search(ctx, kb.ID, embeddings[0], retrieveTop, vectorstore.DefaultMinScore)
 		if err != nil {
 			s.logger.Error("vector search failed", "kb_id", kb.ID, "error", err)
-			continue
 		}
-		allResults = append(allResults, results...)
+
+		bm25Results, err := s.vectorStore.SearchBM25(ctx, kb.ID, query, retrieveTop)
+		if err != nil {
+			s.logger.Error("bm25 search failed", "kb_id", kb.ID, "error", err)
+		}
+
+		merged := rrfMerge(vectorResults, bm25Results, topK)
+		allResults = append(allResults, merged...)
 	}
 
 	if len(allResults) > topK {
@@ -261,6 +273,50 @@ func (s *service) Search(ctx context.Context, agentID int64, query string, topK 
 	}
 
 	return allResults, nil
+}
+
+func rrfMerge(vectorResults, bm25Results []vectorstore.SearchResult, topK int) []vectorstore.SearchResult {
+	type rrfEntry struct {
+		result vectorstore.SearchResult
+		score  float64
+	}
+
+	scores := make(map[int64]*rrfEntry)
+
+	for rank, r := range vectorResults {
+		scores[r.ChunkID] = &rrfEntry{
+			result: r,
+			score:  1.0 / float64(rrfK+rank+1),
+		}
+	}
+
+	for rank, r := range bm25Results {
+		if entry, ok := scores[r.ChunkID]; ok {
+			entry.score += 1.0 / float64(rrfK+rank+1)
+		} else {
+			scores[r.ChunkID] = &rrfEntry{
+				result: r,
+				score:  1.0 / float64(rrfK+rank+1),
+			}
+		}
+	}
+
+	entries := make([]rrfEntry, 0, len(scores))
+	for _, e := range scores {
+		entries = append(entries, *e)
+	}
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].score > entries[j].score
+	})
+
+	if topK > len(entries) {
+		topK = len(entries)
+	}
+	results := make([]vectorstore.SearchResult, topK)
+	for i := 0; i < topK; i++ {
+		results[i] = entries[i].result
+	}
+	return results
 }
 
 func FormatSearchResults(results []vectorstore.SearchResult) string {
