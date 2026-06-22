@@ -313,3 +313,47 @@ func TestFormatSearchResults(t *testing.T) {
 		t.Fatalf("expected empty for nil results, got %s", empty)
 	}
 }
+
+func TestRRFMerge(t *testing.T) {
+	vectorResults := []vectorstore.SearchResult{
+		{ChunkID: 1, Content: "chunk A", Score: 0.9},
+		{ChunkID: 2, Content: "chunk B", Score: 0.8},
+		{ChunkID: 3, Content: "chunk C", Score: 0.7},
+	}
+	bm25Results := []vectorstore.SearchResult{
+		{ChunkID: 3, Content: "chunk C", Score: 0},
+		{ChunkID: 4, Content: "chunk D", Score: 0},
+		{ChunkID: 1, Content: "chunk A", Score: 0},
+	}
+
+	merged := rrfMerge(vectorResults, bm25Results, 3)
+
+	if len(merged) != 3 {
+		t.Fatalf("expected 3 results, got %d", len(merged))
+	}
+
+	// chunk A and C appear in both lists, should rank higher than B and D
+	topIDs := map[int64]bool{}
+	for _, r := range merged[:2] {
+		topIDs[r.ChunkID] = true
+	}
+	if !topIDs[1] || !topIDs[3] {
+		t.Errorf("expected chunk 1 and 3 in top 2, got %v", merged[:2])
+	}
+}
+
+func TestRRFMergeEmpty(t *testing.T) {
+	merged := rrfMerge(nil, nil, 5)
+	if len(merged) != 0 {
+		t.Fatalf("expected 0 results, got %d", len(merged))
+	}
+
+	vectorOnly := rrfMerge(
+		[]vectorstore.SearchResult{{ChunkID: 1, Content: "A"}},
+		nil,
+		5,
+	)
+	if len(vectorOnly) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(vectorOnly))
+	}
+}

@@ -59,6 +59,7 @@ func Migrate(db *sql.DB) error {
 		createChunksTable,
 		createChunksIndex,
 		createAgentKnowledgeBasesTable,
+		createChunksFTS,
 	}
 	for _, m := range migrations {
 		if _, err := db.Exec(m); err != nil {
@@ -321,4 +322,8 @@ CREATE TABLE IF NOT EXISTS agent_knowledge_bases (
     FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE,
     FOREIGN KEY (knowledge_base_id) REFERENCES knowledge_bases(id) ON DELETE CASCADE
 );
+`
+
+const createChunksFTS = `
+CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(content, content='chunks', content_rowid='id');
 `
