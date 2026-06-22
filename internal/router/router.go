@@ -4,6 +4,7 @@ import (
 	"github.com/Ddhjx-code/AgentHub/internal/handler/admin"
 	agentHandler "github.com/Ddhjx-code/AgentHub/internal/handler/agent"
 	chatHandler "github.com/Ddhjx-code/AgentHub/internal/handler/chat"
+	kbHandler "github.com/Ddhjx-code/AgentHub/internal/handler/knowledge"
 	"github.com/Ddhjx-code/AgentHub/internal/handler/user"
 	"github.com/Ddhjx-code/AgentHub/internal/middleware"
 	userRepo "github.com/Ddhjx-code/AgentHub/internal/repository/user"
@@ -18,6 +19,7 @@ func Setup(
 	agentH *agentHandler.Handler,
 	adminH *admin.Handler,
 	chatH *chatHandler.Handler,
+	kbH *kbHandler.Handler,
 ) {
 	engine.Use(middleware.CORS())
 
@@ -62,6 +64,21 @@ func Setup(
 					adminAgents.PUT("/:id", adminH.UpdateAgent)
 					adminAgents.DELETE("/:id", adminH.DeleteAgent)
 					adminAgents.PUT("/:id/toggle", adminH.ToggleAgentStatus)
+					adminAgents.POST("/:id/knowledge-bases", kbH.BindAgentKB)
+					adminAgents.GET("/:id/knowledge-bases", kbH.ListAgentKBs)
+					adminAgents.DELETE("/:id/knowledge-bases/:kb_id", kbH.UnbindAgentKB)
+				}
+
+				adminKBs := adminGroup.Group("/knowledge-bases")
+				{
+					adminKBs.POST("", kbH.CreateKB)
+					adminKBs.GET("", kbH.ListKBs)
+					adminKBs.GET("/:id", kbH.GetKB)
+					adminKBs.PUT("/:id", kbH.UpdateKB)
+					adminKBs.DELETE("/:id", kbH.DeleteKB)
+					adminKBs.POST("/:id/documents", kbH.UploadDocument)
+					adminKBs.GET("/:id/documents", kbH.ListDocuments)
+					adminKBs.DELETE("/:id/documents/:doc_id", kbH.DeleteDocument)
 				}
 			}
 		}

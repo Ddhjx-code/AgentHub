@@ -25,4 +25,7 @@ var (
 	ErrInvalidEngine    = &ErrCode{Code: 4008, Message: "invalid engine type"}
 	ErrToolLoopLimit    = &ErrCode{Code: 4009, Message: "tool call loop limit exceeded"}
 	ErrLLMError         = &ErrCode{Code: 4010, Message: "LLM service error"}
+	ErrKBNotFound       = &ErrCode{Code: 4011, Message: "knowledge base not found"}
+	ErrDocNotFound      = &ErrCode{Code: 4012, Message: "document not found"}
+	ErrEmbeddingError   = &ErrCode{Code: 4013, Message: "embedding service error"}
 )

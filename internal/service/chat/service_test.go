@@ -77,7 +77,7 @@ func setupTest(t *testing.T, llmClient llm.Client, toolExec *mockToolExecutor) *
 	tr := txRepo.NewRepository(db)
 	lg := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
 
-	svc := NewService(ar, cr, mr, wr, tr, llmClient, toolExec, lg)
+	svc := NewService(ar, cr, mr, wr, tr, llmClient, toolExec, nil, lg)
 
 	return &testEnv{
 		svc:        svc,

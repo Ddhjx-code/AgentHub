@@ -6,13 +6,16 @@ import (
 
 	"github.com/Ddhjx-code/AgentHub/internal/config"
 	"github.com/Ddhjx-code/AgentHub/internal/database"
+	"github.com/Ddhjx-code/AgentHub/internal/embedding"
 	adminHandler "github.com/Ddhjx-code/AgentHub/internal/handler/admin"
 	agentHandler "github.com/Ddhjx-code/AgentHub/internal/handler/agent"
 	chatHandler "github.com/Ddhjx-code/AgentHub/internal/handler/chat"
+	kbHandler "github.com/Ddhjx-code/AgentHub/internal/handler/knowledge"
 	userHandler "github.com/Ddhjx-code/AgentHub/internal/handler/user"
 	"github.com/Ddhjx-code/AgentHub/internal/llm"
 	agentRepo "github.com/Ddhjx-code/AgentHub/internal/repository/agent"
 	convRepo "github.com/Ddhjx-code/AgentHub/internal/repository/conversation"
+	kbRepo "github.com/Ddhjx-code/AgentHub/internal/repository/knowledge"
 	msgRepo "github.com/Ddhjx-code/AgentHub/internal/repository/message"
 	txRepo "github.com/Ddhjx-code/AgentHub/internal/repository/transaction"
 	userRepo "github.com/Ddhjx-code/AgentHub/internal/repository/user"
@@ -20,8 +23,10 @@ import (
 	"github.com/Ddhjx-code/AgentHub/internal/router"
 	agentSvc "github.com/Ddhjx-code/AgentHub/internal/service/agent"
 	chatSvc "github.com/Ddhjx-code/AgentHub/internal/service/chat"
+	knowledgeSvc "github.com/Ddhjx-code/AgentHub/internal/service/knowledge"
 	userSvc "github.com/Ddhjx-code/AgentHub/internal/service/user"
 	"github.com/Ddhjx-code/AgentHub/internal/tool"
+	"github.com/Ddhjx-code/AgentHub/internal/vectorstore"
 	"github.com/Ddhjx-code/AgentHub/pkg/logger"
 	"github.com/gin-gonic/gin"
 )
@@ -54,24 +59,29 @@ func main() {
 	cr := convRepo.NewRepository(db)
 	mr := msgRepo.NewRepository(db)
 	tr := txRepo.NewRepository(db)
+	kr := kbRepo.NewRepository(db)
 
 	llmClient := llm.NewClient()
 	toolExec := tool.NewExecutor(cfg.Coze.BaseURL, cfg.N8N.DefaultTimeout)
+	embClient := embedding.NewClient()
+	vs := vectorstore.NewSQLiteStore(db)
 
 	us := userSvc.NewService(ur, wr, cfg.JWT, lg)
 	as := agentSvc.NewService(ar, lg)
-	cs := chatSvc.NewService(ar, cr, mr, wr, tr, llmClient, toolExec, lg)
+	ks := knowledgeSvc.NewService(kr, embClient, vs, lg)
+	cs := chatSvc.NewService(ar, cr, mr, wr, tr, llmClient, toolExec, ks, lg)
 
 	uh := userHandler.NewHandler(us)
 	agH := agentHandler.NewHandler(as)
 	adH := adminHandler.NewHandler(as)
 	chH := chatHandler.NewHandler(cs)
+	kH := kbHandler.NewHandler(ks)
 
 	if cfg.Server.Mode != "debug" {
 		gin.SetMode(gin.ReleaseMode)
 	}
 	engine := gin.Default()
-	router.Setup(engine, cfg.JWT.Secret, ur, uh, agH, adH, chH)
+	router.Setup(engine, cfg.JWT.Secret, ur, uh, agH, adH, chH, kH)
 
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
 	lg.Info("AgentHub server starting", "addr", addr)
