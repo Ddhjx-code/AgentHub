@@ -74,7 +74,8 @@ type UpdateRequest struct {
 
 type AgentDetail struct {
 	*model.Agent
-	Tools []*model.AgentTool `json:"tools"`
+	Tools     []*model.AgentTool `json:"tools"`
+	MaskedKey string             `json:"api_key,omitempty"`
 }
 
 type service struct {
@@ -260,7 +261,18 @@ func (s *service) buildDetail(ctx context.Context, agent *model.Agent) (*AgentDe
 	if tools == nil {
 		tools = []*model.AgentTool{}
 	}
-	return &AgentDetail{Agent: agent, Tools: tools}, nil
+	detail := &AgentDetail{Agent: agent, Tools: tools}
+	if agent.APIKey != "" {
+		detail.MaskedKey = maskKey(agent.APIKey)
+	}
+	return detail, nil
+}
+
+func maskKey(key string) string {
+	if len(key) <= 8 {
+		return "****"
+	}
+	return key[:4] + "****" + key[len(key)-4:]
 }
 
 func applyUpdate(agent *model.Agent, req UpdateRequest) {
@@ -303,7 +315,7 @@ func applyUpdate(agent *model.Agent, req UpdateRequest) {
 	if req.BaseURL != nil {
 		agent.BaseURL = *req.BaseURL
 	}
-	if req.APIKey != nil {
+	if req.APIKey != nil && *req.APIKey != "" {
 		agent.APIKey = *req.APIKey
 	}
 	if req.Featured != nil {

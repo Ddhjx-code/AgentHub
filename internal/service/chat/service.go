@@ -213,6 +213,7 @@ func (s *service) llmLoop(ctx context.Context, agent *model.Agent, tools []*mode
 
 		resp, err := s.llmClient.ChatCompletion(ctx, agent.BaseURL, agent.APIKey, req)
 		if err != nil {
+			s.logger.Error("LLM call failed", "error", err, "base_url", agent.BaseURL, "model", agent.ModelName)
 			return "", errcode.ErrLLMError
 		}
 		if len(resp.Choices) == 0 {

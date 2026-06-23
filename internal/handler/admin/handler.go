@@ -99,7 +99,7 @@ func (h *Handler) CreateAgent(c *gin.Context) {
 			Name:        t.Name,
 			Description: t.Description,
 			Type:        t.Type,
-			InputSchema: rawOrDefault(t.InputSchema, "{}"),
+			InputSchema: rawOrDefault(t.InputSchema, `{"type":"object","properties":{}}`),
 			Config:      rawOrDefault(t.Config, "{}"),
 		})
 	}
@@ -181,7 +181,7 @@ func (h *Handler) UpdateAgent(c *gin.Context) {
 				Name:        t.Name,
 				Description: t.Description,
 				Type:        t.Type,
-				InputSchema: rawOrDefault(t.InputSchema, "{}"),
+				InputSchema: rawOrDefault(t.InputSchema, `{"type":"object","properties":{}}`),
 				Config:      rawOrDefault(t.Config, "{}"),
 			})
 		}
