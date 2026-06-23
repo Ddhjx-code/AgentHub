@@ -44,6 +44,11 @@ export async function toggleAgent(id: number): Promise<void> {
   await client.put(`/admin/agents/${id}/toggle`)
 }
 
+export async function getAdminAgent(id: number): Promise<Agent> {
+  const resp = await client.get<ApiResponse<Agent>>(`/admin/agents/${id}`)
+  return resp.data.data
+}
+
 export async function listAllAgents(params: ListAgentsParams = {}): Promise<ListAgentsResponse> {
   const resp = await client.get<ApiResponse<Agent[]>>('/admin/agents', { params })
   return {

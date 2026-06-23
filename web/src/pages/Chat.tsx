@@ -74,17 +74,8 @@ export default function Chat() {
         setActiveConvId(resp.conversation_id)
         loadConversations()
       }
-
-      const tempAiMsg: Message = {
-        id: Date.now() + 1,
-        conversation_id: resp.conversation_id,
-        role: 'assistant',
-        content: resp.reply,
-        tool_calls: '',
-        tool_call_id: '',
-        created_at: new Date().toISOString(),
-      }
-      setMessages((prev) => [...prev, tempAiMsg])
+      const allMsgs = await getMessages(resp.conversation_id)
+      setMessages(allMsgs)
     } catch (err) {
       flash(err instanceof Error ? err.message : t.chat.sending, 'error')
     } finally {

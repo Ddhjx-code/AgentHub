@@ -2,8 +2,10 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/Ddhjx-code/AgentHub/internal/model"
 	agentRepo "github.com/Ddhjx-code/AgentHub/internal/repository/agent"
@@ -72,10 +74,22 @@ type UpdateRequest struct {
 	Tools       []ToolRequest
 }
 
+type AdminToolView struct {
+	ID          int64           `json:"id"`
+	AgentID     int64           `json:"agent_id"`
+	Name        string          `json:"name"`
+	Description string          `json:"description"`
+	Type        string          `json:"type"`
+	InputSchema json.RawMessage `json:"input_schema"`
+	Config      json.RawMessage `json:"config"`
+	CreatedAt   time.Time       `json:"created_at"`
+}
+
 type AgentDetail struct {
 	*model.Agent
-	Tools     []*model.AgentTool `json:"tools"`
-	MaskedKey string             `json:"api_key,omitempty"`
+	Tools      []*model.AgentTool `json:"tools"`
+	AdminTools []AdminToolView    `json:"admin_tools,omitempty"`
+	MaskedKey  string             `json:"api_key,omitempty"`
 }
 
 type service struct {
@@ -224,7 +238,7 @@ func (s *service) AdminGetByID(ctx context.Context, id int64) (*AgentDetail, err
 	if agent == nil {
 		return nil, errcode.ErrNotFound
 	}
-	return s.buildDetail(ctx, agent)
+	return s.buildAdminDetail(ctx, agent)
 }
 
 func (s *service) ListActive(ctx context.Context, page, limit int, category, tag string) ([]*model.Agent, int, error) {
@@ -265,6 +279,28 @@ func (s *service) buildDetail(ctx context.Context, agent *model.Agent) (*AgentDe
 	if agent.APIKey != "" {
 		detail.MaskedKey = maskKey(agent.APIKey)
 	}
+	return detail, nil
+}
+
+func (s *service) buildAdminDetail(ctx context.Context, agent *model.Agent) (*AgentDetail, error) {
+	detail, err := s.buildDetail(ctx, agent)
+	if err != nil {
+		return nil, err
+	}
+	adminTools := make([]AdminToolView, len(detail.Tools))
+	for i, t := range detail.Tools {
+		adminTools[i] = AdminToolView{
+			ID:          t.ID,
+			AgentID:     t.AgentID,
+			Name:        t.Name,
+			Description: t.Description,
+			Type:        t.Type,
+			InputSchema: t.InputSchema,
+			Config:      t.Config,
+			CreatedAt:   t.CreatedAt,
+		}
+	}
+	detail.AdminTools = adminTools
 	return detail, nil
 }
 
