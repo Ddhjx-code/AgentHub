@@ -112,7 +112,7 @@ export default function AgentList() {
                     <span className="text-accent font-mono font-bold">{a.cost}</span>
                     <span className="text-white/25 text-xs ml-1">{t.common.cr}</span>
                   </td>
-                  <td className={TD}><span className="text-white/40 font-mono">{((a.call_count || 0) / 1000).toFixed(1)}k</span></td>
+                  <td className={TD}><span className="text-white/40 font-mono">{((a.calls || 0) / 1000).toFixed(1)}k</span></td>
                   <td className={TD}>
                     <button
                       onClick={() => handleToggle(a.id)}

@@ -94,9 +94,9 @@ export default function AgentDetail() {
                       </span>
                     )}
                   </div>
-                  <p className="text-white/55">{agent.description}</p>
+                  <p className="text-white/55">{agent.short_desc || agent.description}</p>
                   <div className="flex flex-wrap items-center gap-4 mt-2">
-                    <span className="text-white/30 text-sm">{(agent.call_count / 1000).toFixed(0)}k {t.detail.calls}</span>
+                    <span className="text-white/30 text-sm">{(agent.calls / 1000).toFixed(0)}k {t.detail.calls}</span>
                     <span className="text-white/30 text-sm">{agent.model_name || 'LLM'}</span>
                   </div>
                 </div>
@@ -117,7 +117,7 @@ export default function AgentDetail() {
               {[
                 { label: t.detail.model, val: agent.model_name || '-' },
                 { label: t.detail.temperature, val: String(agent.temperature) },
-                { label: t.detail.calls, val: `${(agent.call_count / 1000).toFixed(1)}k` },
+                { label: t.detail.calls, val: `${(agent.calls / 1000).toFixed(1)}k` },
               ].map((s) => (
                 <div key={s.label} className="bg-white/[0.03] border border-white/[0.07] rounded-xl p-4 text-center">
                   <div className="text-xl font-black text-white font-mono">{s.val}</div>

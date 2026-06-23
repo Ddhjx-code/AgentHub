@@ -37,7 +37,7 @@ export default function AgentModal({ agent, onClose, onSave }: Props) {
       setForm({
         name: agent.name || '',
         icon: agent.icon || '🤖',
-        description: agent.description || '',
+        description: agent.short_desc || agent.description || '',
         category: agent.category || '',
         tags: (agent.tags || []).join(', '),
         status: agent.status || 'active',
@@ -62,8 +62,10 @@ export default function AgentModal({ agent, onClose, onSave }: Props) {
   const set = (k: string, v: string | number) => setForm((f) => ({ ...f, [k]: v }))
 
   const handleSave = () => {
+    const { description, ...rest } = form
     onSave({
-      ...form,
+      ...rest,
+      short_desc: description,
       tags: form.tags.split(',').map((s) => s.trim()).filter(Boolean),
     } as unknown as Partial<Agent>)
   }

@@ -138,7 +138,7 @@ export default function Chat() {
               <div className="text-center">
                 <div className="text-5xl mb-4">{agent?.icon || '🤖'}</div>
                 <h2 className="text-xl font-bold text-white mb-2">{agent?.name || 'Agent'}</h2>
-                <p className="text-white/35 text-sm max-w-md">{agent?.description || t.chat.startConversation}</p>
+                <p className="text-white/35 text-sm max-w-md">{agent?.short_desc || agent?.description || t.chat.startConversation}</p>
               </div>
             </div>
           ) : (

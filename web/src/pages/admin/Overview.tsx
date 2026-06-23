@@ -12,7 +12,7 @@ export default function Overview() {
   }, [])
 
   const activeCount = agents.filter((a) => a.status === 'active').length
-  const totalCalls = agents.reduce((s, a) => s + (a.call_count || 0), 0)
+  const totalCalls = agents.reduce((s, a) => s + (a.calls || 0), 0)
 
   const stats = [
     { icon: '⬡', label: t.admin.totalAgents, val: String(agents.length), color: '#7c3aed' },
@@ -37,7 +37,7 @@ export default function Overview() {
 
       <div className="bg-white/[0.03] border border-white/[0.07] rounded-2xl p-5">
         <p className="text-white/30 text-xs font-mono tracking-wider mb-4">// {t.admin.callRanking}</p>
-        {[...agents].sort((a, b) => (b.call_count || 0) - (a.call_count || 0)).map((a, i) => (
+        {[...agents].sort((a, b) => (b.calls || 0) - (a.calls || 0)).map((a, i) => (
           <div key={a.id} className="flex items-center gap-3 mb-3">
             <span className="text-white/20 text-sm w-4 font-mono">{i + 1}</span>
             <span className="text-base">{a.icon || '🤖'}</span>
@@ -45,14 +45,14 @@ export default function Overview() {
               <div className="flex items-center justify-between mb-1">
                 <p className="text-white/65 text-sm truncate">{a.name}</p>
                 <p className="text-white/30 text-xs font-mono ml-2">
-                  {((a.call_count || 0) / 1000).toFixed(0)}k
+                  {((a.calls || 0) / 1000).toFixed(0)}k
                 </p>
               </div>
               <div className="h-1 bg-white/[0.05] rounded-full overflow-hidden">
                 <div
                   className="h-full rounded-full"
                   style={{
-                    width: `${((a.call_count || 0) / (agents[0]?.call_count || 1)) * 100}%`,
+                    width: `${((a.calls || 0) / (agents[0]?.calls || 1)) * 100}%`,
                     background: a.color || '#7c3aed',
                     opacity: 0.55,
                   }}

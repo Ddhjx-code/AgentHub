@@ -31,6 +31,12 @@ func Setup(
 			auth.POST("/login", userHandler.Login)
 		}
 
+		publicAgents := api.Group("/agents")
+		{
+			publicAgents.GET("", agentH.List)
+			publicAgents.GET("/:id", agentH.Detail)
+		}
+
 		protected := api.Group("")
 		protected.Use(middleware.JWTAuth(jwtSecret, ur))
 		{
@@ -41,8 +47,6 @@ func Setup(
 
 			agentGroup := protected.Group("/agents")
 			{
-				agentGroup.GET("", agentH.List)
-				agentGroup.GET("/:id", agentH.Detail)
 				agentGroup.POST("/:id/chat", chatH.SendMessage)
 			}
 

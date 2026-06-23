@@ -10,6 +10,8 @@ export interface User {
 export interface Agent {
   id: number
   name: string
+  short_desc: string
+  full_desc: string
   description: string
   icon: string
   color: string
@@ -23,7 +25,7 @@ export interface Agent {
   temperature: number
   max_tokens: number
   cost: number
-  call_count: number
+  calls: number
   tools: AgentTool[]
   created_at: string
   updated_at: string

@@ -30,7 +30,7 @@ export default function AgentCard({ agent }: Props) {
         </div>
         <div className="min-w-0">
           <h3 className="font-bold text-white">{agent.name}</h3>
-          <p className="text-white/45 text-sm mt-0.5 line-clamp-2">{agent.description}</p>
+          <p className="text-white/45 text-sm mt-0.5 line-clamp-2">{agent.short_desc || agent.description}</p>
         </div>
       </div>
 
@@ -56,7 +56,7 @@ export default function AgentCard({ agent }: Props) {
           </div>
           {agent.category && <span className="text-white/25 text-xs">{agent.category}</span>}
         </div>
-        <span className="text-white/30 text-xs font-mono">{(agent.call_count / 1000).toFixed(1)}k {t.agentCard.calls}</span>
+        <span className="text-white/30 text-xs font-mono">{(agent.calls / 1000).toFixed(1)}k {t.agentCard.calls}</span>
       </div>
     </div>
   )
