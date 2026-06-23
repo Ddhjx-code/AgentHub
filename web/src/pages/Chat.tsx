@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useParams, useSearchParams, Link } from 'react-router-dom'
 import { getAgent } from '../api/agent'
 import { sendMessage, listConversations, getMessages, deleteConversation } from '../api/chat'
+import { useLocale } from '../contexts/LocaleContext'
 import type { Agent, Conversation, Message } from '../types'
 import ConversationList from '../components/ConversationList'
 import ChatMessage from '../components/ChatMessage'
@@ -11,6 +12,7 @@ export default function Chat() {
   const { agentId } = useParams<{ agentId: string }>()
   const [searchParams] = useSearchParams()
   const { flash } = useAuth()
+  const { t } = useLocale()
 
   const [agent, setAgent] = useState<Agent | null>(null)
   const [conversations, setConversations] = useState<Conversation[]>([])
@@ -84,7 +86,7 @@ export default function Chat() {
       }
       setMessages((prev) => [...prev, tempAiMsg])
     } catch (err) {
-      flash(err instanceof Error ? err.message : 'Failed to send message', 'error')
+      flash(err instanceof Error ? err.message : t.chat.sending, 'error')
     } finally {
       setSending(false)
     }
@@ -99,7 +101,7 @@ export default function Chat() {
       }
       loadConversations()
     } catch {
-      flash('Failed to delete conversation', 'error')
+      flash(t.admin.deleteFailed, 'error')
     }
   }
 
@@ -136,7 +138,7 @@ export default function Chat() {
               <div className="text-center">
                 <div className="text-5xl mb-4">{agent?.icon || '🤖'}</div>
                 <h2 className="text-xl font-bold text-white mb-2">{agent?.name || 'Agent'}</h2>
-                <p className="text-white/35 text-sm max-w-md">{agent?.description || 'Start a conversation'}</p>
+                <p className="text-white/35 text-sm max-w-md">{agent?.description || t.chat.startConversation}</p>
               </div>
             </div>
           ) : (
@@ -167,7 +169,7 @@ export default function Chat() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() } }}
-              placeholder="Type your message..."
+              placeholder={t.chat.placeholder}
               disabled={sending}
               className="flex-1 bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-white placeholder-white/25 text-sm focus:outline-none focus:border-primary/40 transition-colors disabled:opacity-50"
             />
@@ -176,7 +178,7 @@ export default function Chat() {
               disabled={sending || !input.trim()}
               className="px-6 py-3 bg-primary text-base font-bold rounded-xl hover:bg-[#00bfe8] transition-colors shadow-[0_0_15px_rgba(0,212,255,0.2)] disabled:opacity-50 disabled:shadow-none shrink-0"
             >
-              Send
+              {t.chat.send}
             </button>
           </div>
         </div>

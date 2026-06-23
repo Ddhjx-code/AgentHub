@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom'
+import { useLocale } from '../contexts/LocaleContext'
 import type { Agent } from '../types'
 
 interface Props {
@@ -7,6 +8,7 @@ interface Props {
 
 export default function AgentCard({ agent }: Props) {
   const navigate = useNavigate()
+  const { t } = useLocale()
   const color = agent.color || '#00d4ff'
   const tags = agent.tags || []
 
@@ -34,12 +36,12 @@ export default function AgentCard({ agent }: Props) {
 
       {tags.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mb-5">
-          {tags.map((t) => (
+          {tags.map((tag) => (
             <span
-              key={t}
+              key={tag}
               className="px-2 py-0.5 bg-white/[0.04] border border-white/[0.07] rounded-full text-white/35 text-[11px]"
             >
-              {t}
+              {tag}
             </span>
           ))}
         </div>
@@ -50,11 +52,11 @@ export default function AgentCard({ agent }: Props) {
           <div className="flex items-center gap-1.5">
             <span className="text-accent">&#9670;</span>
             <span className="text-accent font-mono font-bold text-sm">{agent.cost}</span>
-            <span className="text-white/30 text-xs">credits</span>
+            <span className="text-white/30 text-xs">{t.agentCard.credits}</span>
           </div>
           {agent.category && <span className="text-white/25 text-xs">{agent.category}</span>}
         </div>
-        <span className="text-white/30 text-xs font-mono">{(agent.call_count / 1000).toFixed(1)}k calls</span>
+        <span className="text-white/30 text-xs font-mono">{(agent.call_count / 1000).toFixed(1)}k {t.agentCard.calls}</span>
       </div>
     </div>
   )

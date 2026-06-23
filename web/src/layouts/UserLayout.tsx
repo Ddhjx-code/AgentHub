@@ -1,16 +1,18 @@
 import { Link, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { useLocale } from '../contexts/LocaleContext'
 import AuthModal from '../components/AuthModal'
 import Toast from '../components/Toast'
 
-const links = [
-  { to: '/', label: 'Home' },
-  { to: '/agents', label: 'Agents' },
-]
-
 export default function UserLayout() {
   const { user, logout, setAuthModal } = useAuth()
+  const { t, locale, toggleLocale } = useLocale()
   const location = useLocation()
+
+  const links = [
+    { to: '/', label: t.nav.home },
+    { to: '/agents', label: t.nav.agents },
+  ]
 
   return (
     <div className="min-h-screen bg-base text-white">
@@ -39,6 +41,13 @@ export default function UserLayout() {
           </div>
 
           <div className="flex items-center gap-3 shrink-0">
+            <button
+              onClick={toggleLocale}
+              className="px-2.5 py-1 bg-white/[0.05] border border-white/[0.08] rounded-full text-xs font-mono text-white/50 hover:text-white/80 hover:bg-white/[0.08] transition-colors"
+            >
+              {locale === 'zh' ? 'EN' : '中'}
+            </button>
+
             {user ? (
               <>
                 <Link
@@ -55,14 +64,14 @@ export default function UserLayout() {
                     to="/admin"
                     className="px-3 py-1.5 bg-secondary/15 border border-secondary/25 text-secondary text-xs font-bold rounded-full hover:bg-secondary/25 transition-colors"
                   >
-                    Admin
+                    {t.nav.admin}
                   </Link>
                 )}
                 <button
                   onClick={logout}
                   className="hidden md:block text-white/35 hover:text-white/65 text-sm transition-colors"
                 >
-                  Logout
+                  {t.nav.logout}
                 </button>
               </>
             ) : (
@@ -71,13 +80,13 @@ export default function UserLayout() {
                   onClick={() => setAuthModal('login')}
                   className="text-white/50 hover:text-white text-sm transition-colors"
                 >
-                  Login
+                  {t.nav.login}
                 </button>
                 <button
                   onClick={() => setAuthModal('register')}
                   className="px-4 py-2 bg-primary text-base text-sm font-black rounded-full hover:bg-[#00bfe8] transition-colors shadow-[0_0_15px_rgba(0,212,255,0.2)]"
                 >
-                  Register
+                  {t.nav.register}
                 </button>
               </>
             )}

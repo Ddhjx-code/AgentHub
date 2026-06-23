@@ -1,8 +1,10 @@
 import { useState, useEffect, type FormEvent } from 'react'
 import { useAuth } from '../contexts/AuthContext'
+import { useLocale } from '../contexts/LocaleContext'
 
 export default function AuthModal() {
   const { authModal, setAuthModal, login, register, loading } = useAuth()
+  const { t } = useLocale()
   const [tab, setTab] = useState<'login' | 'register'>('login')
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
@@ -25,13 +27,13 @@ export default function AuthModal() {
     e.preventDefault()
     setErr('')
     if (tab === 'login') {
-      if (!email || !pwd) { setErr('Please fill in all fields'); return }
+      if (!email || !pwd) { setErr(t.auth.fillAll); return }
       const ok = await login(email, pwd)
-      if (!ok) setErr('Login failed')
+      if (!ok) setErr(t.auth.loginFailed)
     } else {
-      if (!email || !name || !pwd) { setErr('Please fill in all fields'); return }
+      if (!email || !name || !pwd) { setErr(t.auth.fillAll); return }
       const ok = await register(email, name, pwd)
-      if (!ok) setErr('Registration failed')
+      if (!ok) setErr(t.auth.registerFailed)
     }
   }
 
@@ -59,10 +61,10 @@ export default function AuthModal() {
         </div>
 
         <div className="flex gap-1 p-1 bg-white/5 rounded-2xl mb-7">
-          {([['login', 'Login'], ['register', 'Register']] as const).map(([k, label]) => (
+          {([['login', t.auth.loginTitle], ['register', t.auth.registerTitle]] as const).map(([k, label]) => (
             <button
               key={k}
-              onClick={() => setTab(k)}
+              onClick={() => setTab(k as 'login' | 'register')}
               className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all ${
                 tab === k
                   ? 'bg-primary text-base shadow-[0_0_15px_rgba(0,212,255,0.3)]'
@@ -77,7 +79,7 @@ export default function AuthModal() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <input
             type="email"
-            placeholder="Email"
+            placeholder={t.auth.email}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             className={inputCls}
@@ -85,7 +87,7 @@ export default function AuthModal() {
           {tab === 'register' && (
             <input
               type="text"
-              placeholder="Name"
+              placeholder={t.auth.name}
               value={name}
               onChange={(e) => setName(e.target.value)}
               className={inputCls}
@@ -93,7 +95,7 @@ export default function AuthModal() {
           )}
           <input
             type="password"
-            placeholder="Password"
+            placeholder={t.auth.password}
             value={pwd}
             onChange={(e) => setPwd(e.target.value)}
             className={inputCls}
@@ -104,23 +106,23 @@ export default function AuthModal() {
             disabled={loading}
             className="w-full py-3.5 bg-primary text-base font-black rounded-xl hover:bg-[#00bfe8] transition-colors shadow-[0_0_20px_rgba(0,212,255,0.25)] mt-1 disabled:opacity-50"
           >
-            {loading ? 'Loading...' : tab === 'login' ? 'Login' : 'Create Account'}
+            {loading ? t.auth.loading : tab === 'login' ? t.auth.loginBtn : t.auth.registerBtn}
           </button>
         </form>
 
         <p className="mt-5 text-center text-white/30 text-sm">
           {tab === 'login' ? (
             <>
-              No account?{' '}
+              {t.auth.noAccount}{' '}
               <button onClick={() => setTab('register')} className="text-primary hover:underline ml-1">
-                Register
+                {t.auth.goRegister}
               </button>
             </>
           ) : (
             <>
-              Already have an account?{' '}
+              {t.auth.hasAccount}{' '}
               <button onClick={() => setTab('login')} className="text-primary hover:underline ml-1">
-                Login
+                {t.auth.goLogin}
               </button>
             </>
           )}

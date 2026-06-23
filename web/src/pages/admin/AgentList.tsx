@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useLocale } from '../../contexts/LocaleContext'
 import { listAllAgents, createAgent, updateAgent, deleteAgent, toggleAgent } from '../../api/agent'
 import type { Agent } from '../../types'
 import AgentModal from '../../components/AgentModal'
@@ -6,6 +7,7 @@ import { useAuth } from '../../contexts/AuthContext'
 
 export default function AgentList() {
   const { flash } = useAuth()
+  const { t } = useLocale()
   const [agents, setAgents] = useState<Agent[]>([])
   const [modal, setModal] = useState<Partial<Agent> | null>(null)
   const [loading, setLoading] = useState(true)
@@ -24,15 +26,15 @@ export default function AgentList() {
     try {
       if (modal?.id) {
         await updateAgent(modal.id, data)
-        flash('Agent updated')
+        flash(t.admin.agentUpdated)
       } else {
         await createAgent(data)
-        flash('Agent created')
+        flash(t.admin.agentCreated)
       }
       setModal(null)
       loadAgents()
     } catch (err) {
-      flash(err instanceof Error ? err.message : 'Save failed', 'error')
+      flash(err instanceof Error ? err.message : t.admin.saveFailed, 'error')
     }
   }
 
@@ -41,18 +43,18 @@ export default function AgentList() {
       await toggleAgent(id)
       loadAgents()
     } catch {
-      flash('Toggle failed', 'error')
+      flash(t.admin.toggleFailed, 'error')
     }
   }
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Delete this agent?')) return
+    if (!confirm(t.admin.confirmDelete)) return
     try {
       await deleteAgent(id)
-      flash('Agent deleted')
+      flash(t.admin.agentDeleted)
       loadAgents()
     } catch {
-      flash('Delete failed', 'error')
+      flash(t.admin.deleteFailed, 'error')
     }
   }
 
@@ -63,31 +65,31 @@ export default function AgentList() {
     <div className="p-8">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <p className="text-secondary text-xs font-mono tracking-widest uppercase mb-1">// Agent Management</p>
-          <h1 className="text-2xl font-black text-white">Agent List</h1>
+          <p className="text-secondary text-xs font-mono tracking-widest uppercase mb-1">// {t.admin.agentMgmt}</p>
+          <h1 className="text-2xl font-black text-white">{t.admin.agentList}</h1>
         </div>
         <button
           onClick={() => setModal({})}
           className="px-5 py-2.5 bg-secondary text-white font-bold rounded-xl text-sm hover:bg-[#6d28d9] transition-colors shadow-[0_0_15px_rgba(124,58,237,0.25)]"
         >
-          + New Agent
+          {t.admin.newAgent}
         </button>
       </div>
 
       {loading ? (
-        <p className="text-white/30 text-sm py-8">Loading...</p>
+        <p className="text-white/30 text-sm py-8">{t.common.loading}</p>
       ) : (
         <div className="bg-white/[0.02] border border-white/[0.07] rounded-2xl overflow-hidden">
           <table className="w-full">
             <thead className="border-b border-white/[0.06]">
               <tr>
-                <th className={TH}>Agent</th>
-                <th className={TH}>Category</th>
-                <th className={TH}>Model</th>
-                <th className={TH}>Cost</th>
-                <th className={TH}>Calls</th>
-                <th className={TH}>Status</th>
-                <th className={TH}>Actions</th>
+                <th className={TH}>{t.admin.agent}</th>
+                <th className={TH}>{t.admin.category}</th>
+                <th className={TH}>{t.admin.model}</th>
+                <th className={TH}>{t.admin.cost}</th>
+                <th className={TH}>{t.admin.calls}</th>
+                <th className={TH}>{t.admin.status}</th>
+                <th className={TH}>{t.admin.actions}</th>
               </tr>
             </thead>
             <tbody>
@@ -108,7 +110,7 @@ export default function AgentList() {
                   <td className={TD}><span className="text-white/40 font-mono text-xs">{a.model_name || '-'}</span></td>
                   <td className={TD}>
                     <span className="text-accent font-mono font-bold">{a.cost}</span>
-                    <span className="text-white/25 text-xs ml-1">cr</span>
+                    <span className="text-white/25 text-xs ml-1">{t.common.cr}</span>
                   </td>
                   <td className={TD}><span className="text-white/40 font-mono">{((a.call_count || 0) / 1000).toFixed(1)}k</span></td>
                   <td className={TD}>
@@ -120,7 +122,7 @@ export default function AgentList() {
                           : 'bg-white/[0.05] text-white/30 border border-white/[0.08]'
                       }`}
                     >
-                      {a.status === 'active' ? 'Active' : 'Inactive'}
+                      {a.status === 'active' ? t.admin.active : t.admin.inactive}
                     </button>
                   </td>
                   <td className={TD}>
@@ -129,13 +131,13 @@ export default function AgentList() {
                         onClick={() => setModal(a)}
                         className="px-2.5 py-1 bg-secondary/15 text-secondary rounded-lg text-xs hover:bg-secondary/25 transition-colors border border-secondary/20"
                       >
-                        Edit
+                        {t.admin.edit}
                       </button>
                       <button
                         onClick={() => handleDelete(a.id)}
                         className="px-2.5 py-1 bg-white/[0.04] text-white/30 rounded-lg text-xs hover:bg-danger/15 hover:text-danger transition-colors"
                       >
-                        Delete
+                        {t.admin.delete}
                       </button>
                     </div>
                   </td>

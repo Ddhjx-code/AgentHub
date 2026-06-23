@@ -1,3 +1,4 @@
+import { useLocale } from '../contexts/LocaleContext'
 import type { Conversation } from '../types'
 
 interface Props {
@@ -9,6 +10,8 @@ interface Props {
 }
 
 export default function ConversationList({ conversations, activeId, onSelect, onDelete, onNew }: Props) {
+  const { t } = useLocale()
+
   return (
     <div className="h-full flex flex-col">
       <div className="p-4 border-b border-white/[0.06]">
@@ -16,13 +19,13 @@ export default function ConversationList({ conversations, activeId, onSelect, on
           onClick={onNew}
           className="w-full py-2.5 bg-primary/15 border border-primary/25 text-primary text-sm font-semibold rounded-xl hover:bg-primary/25 transition-colors"
         >
-          + New Chat
+          {t.chat.newChat}
         </button>
       </div>
 
       <div className="flex-1 overflow-y-auto p-2 space-y-1">
         {conversations.length === 0 ? (
-          <p className="text-white/25 text-xs text-center py-8">No conversations</p>
+          <p className="text-white/25 text-xs text-center py-8">{t.chat.noConversations}</p>
         ) : (
           conversations.map((conv) => (
             <div

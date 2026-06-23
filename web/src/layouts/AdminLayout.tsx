@@ -1,16 +1,18 @@
 import { Link, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { useLocale } from '../contexts/LocaleContext'
 import Toast from '../components/Toast'
-
-const nav = [
-  { to: '/admin', label: 'Overview', icon: '⊡' },
-  { to: '/admin/agents', label: 'Agents', icon: '⬡' },
-  { to: '/admin/knowledge-bases', label: 'Knowledge Bases', icon: '◈' },
-]
 
 export default function AdminLayout() {
   const { user, logout } = useAuth()
+  const { t, locale, toggleLocale } = useLocale()
   const location = useLocation()
+
+  const nav = [
+    { to: '/admin', label: t.admin.overview, icon: '⊡' },
+    { to: '/admin/agents', label: t.admin.agentMgmt, icon: '⬡' },
+    { to: '/admin/knowledge-bases', label: t.admin.kbLabel, icon: '◈' },
+  ]
 
   const isActive = (to: string) => {
     if (to === '/admin') return location.pathname === '/admin'
@@ -50,11 +52,17 @@ export default function AdminLayout() {
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-white/40 hover:text-white/75 hover:bg-white/[0.04] transition-all text-left"
           >
             <span>&larr;</span>
-            Back to Site
+            {t.admin.backToSite}
           </Link>
         </nav>
 
-        <div className="p-4 border-t border-white/[0.05]">
+        <div className="p-4 border-t border-white/[0.05] space-y-3">
+          <button
+            onClick={toggleLocale}
+            className="w-full px-3 py-1.5 bg-white/[0.04] border border-white/[0.08] rounded-lg text-xs font-mono text-white/40 hover:text-white/70 hover:bg-white/[0.08] transition-colors"
+          >
+            {locale === 'zh' ? 'EN / English' : '中 / 中文'}
+          </button>
           <div className="flex items-center gap-2.5 px-1">
             <div className="w-7 h-7 rounded-full bg-secondary flex items-center justify-center text-white text-xs font-black">
               {user?.name?.slice(0, 1).toUpperCase() || 'A'}
@@ -64,7 +72,7 @@ export default function AdminLayout() {
               <p className="text-white/25 text-xs truncate">{user?.email}</p>
             </div>
             <button onClick={logout} className="text-white/25 hover:text-white/60 text-xs transition-colors">
-              Logout
+              {t.nav.logout}
             </button>
           </div>
         </div>
