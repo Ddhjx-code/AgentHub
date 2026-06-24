@@ -27,6 +27,7 @@ export interface Agent {
   cost: number
   calls: number
   tools: AgentTool[]
+  admin_tools?: AdminToolView[]
   created_at: string
   updated_at: string
 }
@@ -39,6 +40,17 @@ export interface AgentTool {
   description: string
   config: string
   input_schema: string
+}
+
+export interface AdminToolView {
+  id: number
+  agent_id: number
+  name: string
+  type: string
+  description: string
+  config: Record<string, unknown>
+  input_schema: Record<string, unknown>
+  created_at: string
 }
 
 export interface Conversation {

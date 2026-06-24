@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react'
 import { useLocale } from '../contexts/LocaleContext'
 import type { Agent, KnowledgeBase } from '../types'
 import { listKnowledgeBases, listAgentKBs, bindAgentKB, unbindAgentKB } from '../api/knowledge'
+import { getAdminAgent } from '../api/agent'
+import ToolConfigForm from './ToolConfigForm'
+import type { ToolFormData } from './ToolConfigForm'
 
 interface Props {
   agent: Partial<Agent> | null
@@ -31,6 +34,7 @@ export default function AgentModal({ agent, onClose, onSave }: Props) {
   })
   const [allKBs, setAllKBs] = useState<KnowledgeBase[]>([])
   const [boundKBIds, setBoundKBIds] = useState<Set<number>>(new Set())
+  const [tools, setTools] = useState<ToolFormData[]>([])
 
   useEffect(() => {
     if (agent) {
@@ -44,7 +48,7 @@ export default function AgentModal({ agent, onClose, onSave }: Props) {
         prompt: agent.prompt || '',
         model_name: agent.model_name || '',
         base_url: agent.base_url || '',
-        api_key: agent.api_key || '',
+        api_key: '',
         temperature: agent.temperature ?? 0.7,
         max_tokens: agent.max_tokens || 2000,
         cost: agent.cost || 10,
@@ -54,6 +58,19 @@ export default function AgentModal({ agent, onClose, onSave }: Props) {
     listKnowledgeBases().then(setAllKBs).catch(() => {})
     if (agent?.id) {
       listAgentKBs(agent.id).then((kbs) => setBoundKBIds(new Set(kbs.map((k) => k.id)))).catch(() => {})
+      getAdminAgent(agent.id).then((detail) => {
+        const adminTools = detail.admin_tools || []
+        setTools(adminTools.map((at) => ({
+          _id: crypto.randomUUID(),
+          name: at.name,
+          type: at.type,
+          description: at.description,
+          input_schema: JSON.stringify(at.input_schema, null, 2),
+          config: (at.config as Record<string, unknown>) || {},
+        })))
+      }).catch(() => {})
+    } else {
+      setTools([])
     }
   }, [agent])
 
@@ -61,12 +78,34 @@ export default function AgentModal({ agent, onClose, onSave }: Props) {
 
   const set = (k: string, v: string | number) => setForm((f) => ({ ...f, [k]: v }))
 
+  const [saveError, setSaveError] = useState('')
+
   const handleSave = () => {
+    setSaveError('')
     const { description, ...rest } = form
+    const toolsPayload = []
+    for (const tl of tools) {
+      let parsedSchema: Record<string, unknown> = {}
+      try {
+        parsedSchema = JSON.parse(tl.input_schema || '{}')
+      } catch {
+        setSaveError(`Invalid JSON in input_schema for tool "${tl.name || 'unnamed'}"`)
+        setTab('tools')
+        return
+      }
+      toolsPayload.push({
+        name: tl.name,
+        type: tl.type,
+        description: tl.description,
+        input_schema: parsedSchema,
+        config: tl.config,
+      })
+    }
     onSave({
       ...rest,
       short_desc: description,
       tags: form.tags.split(',').map((s) => s.trim()).filter(Boolean),
+      tools: toolsPayload,
     } as unknown as Partial<Agent>)
   }
 
@@ -90,6 +129,7 @@ export default function AgentModal({ agent, onClose, onSave }: Props) {
     ['prompt', t.agentModal.tabPrompt],
     ['llm', t.agentModal.tabLLM],
     ['kb', t.agentModal.tabKB],
+    ['tools', t.agentModal.tabTools],
   ]
   const inp = 'w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2.5 text-white/80 text-sm focus:outline-none focus:border-secondary/50 transition-colors placeholder-white/20'
   const lbl = 'text-white/40 text-xs mb-1.5 block'
@@ -217,15 +257,54 @@ export default function AgentModal({ agent, onClose, onSave }: Props) {
               )}
             </>
           )}
+
+          {tab === 'tools' && (
+            <>
+              {tools.length === 0 ? (
+                <p className="text-white/30 text-sm py-4">{t.agentModal.noTools}</p>
+              ) : (
+                tools.map((tl, idx) => (
+                  <ToolConfigForm
+                    key={tl._id}
+                    tool={tl}
+                    onChange={(updated) => {
+                      const next = [...tools]
+                      next[idx] = updated
+                      setTools(next)
+                    }}
+                    onDelete={() => setTools(tools.filter((_, i) => i !== idx))}
+                  />
+                ))
+              )}
+              <button
+                onClick={() => setTools([...tools, {
+                  _id: crypto.randomUUID(),
+                  name: '',
+                  type: 'coze',
+                  description: '',
+                  input_schema: '{"type":"object","properties":{}}',
+                  config: {},
+                }])}
+                className="w-full py-2.5 bg-white/[0.04] border border-dashed border-white/[0.15] text-white/40 rounded-xl text-sm hover:bg-white/[0.08] hover:text-white/60 transition-colors"
+              >
+                {t.agentModal.addTool}
+              </button>
+            </>
+          )}
         </div>
 
-        <div className="flex justify-end gap-3 px-7 py-5 border-t border-white/[0.06]">
-          <button className="px-5 py-2.5 bg-white/[0.04] border border-white/[0.08] text-white/50 rounded-xl text-sm hover:bg-white/[0.08] transition-colors" onClick={onClose}>
-            {t.agentModal.cancel}
-          </button>
-          <button className="px-6 py-2.5 bg-secondary text-white font-bold rounded-xl text-sm hover:bg-[#6d28d9] transition-colors shadow-[0_0_20px_rgba(124,58,237,0.3)]" onClick={handleSave}>
-            {t.agentModal.save}
-          </button>
+        <div className="px-7 py-5 border-t border-white/[0.06]">
+          {saveError && (
+            <p className="text-danger text-xs mb-3">{saveError}</p>
+          )}
+          <div className="flex justify-end gap-3">
+            <button className="px-5 py-2.5 bg-white/[0.04] border border-white/[0.08] text-white/50 rounded-xl text-sm hover:bg-white/[0.08] transition-colors" onClick={onClose}>
+              {t.agentModal.cancel}
+            </button>
+            <button className="px-6 py-2.5 bg-secondary text-white font-bold rounded-xl text-sm hover:bg-[#6d28d9] transition-colors shadow-[0_0_20px_rgba(124,58,237,0.3)]" onClick={handleSave}>
+              {t.agentModal.save}
+            </button>
+          </div>
         </div>
       </div>
     </div>
